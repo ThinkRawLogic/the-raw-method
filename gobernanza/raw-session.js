@@ -66,7 +66,7 @@ function main() {
   // JSON: `systemMessage` = banner VISIBLE para el humano; `additionalContext` = el reflejo
   // que lee la IA. (stdout crudo solo iría al contexto de la IA, invisible para el usuario.)
   const out = {
-    systemMessage: '━━━ THE RAW METHOD — ACTIVO EN ESTE PROYECTO ━━━',
+    systemMessage: '━━━ THE RAW METHOD — ACTIVO EN ESTE PROYECTO ━━━  ·  Raw Logic. A thinking venture.',
     hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: REFLEJO },
   };
   try { process.stdout.write(JSON.stringify(out)); } catch (_) {}
