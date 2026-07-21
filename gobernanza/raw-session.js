@@ -7,8 +7,10 @@
  * para que la IA NO pueda "olvidar" que opera bajo él. Fuera de un proyecto
  * Raw Method, calla (no ensucia otras sesiones).
  *
- * Contrato SessionStart (Claude Code nativo): lo que se escribe a stdout se
- * agrega al contexto de la sesión. Salida cruda, sin JSON.
+ * Contrato SessionStart (Claude Code nativo): se emite JSON por stdout con dos campos:
+ *   - `systemMessage`                    → aviso VISIBLE para el humano (banner en la UI).
+ *   - `hookSpecificOutput.additionalContext` → el reflejo completo, que lee la IA.
+ * (stdout CRUDO solo llegaría al contexto de la IA — invisible para el usuario; por eso el JSON.)
  */
 
 'use strict';
@@ -61,7 +63,13 @@ function main() {
   if (process.env.CLAUDE_PROJECT_DIR) dir = process.env.CLAUDE_PROJECT_DIR;
 
   if (!isMethodProject(dir)) return; // silencio fuera de un proyecto Raw Method
-  try { process.stdout.write(REFLEJO); } catch (_) {}
+  // JSON: `systemMessage` = banner VISIBLE para el humano; `additionalContext` = el reflejo
+  // que lee la IA. (stdout crudo solo iría al contexto de la IA, invisible para el usuario.)
+  const out = {
+    systemMessage: '━━━ THE RAW METHOD — ACTIVO EN ESTE PROYECTO ━━━',
+    hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: REFLEJO },
+  };
+  try { process.stdout.write(JSON.stringify(out)); } catch (_) {}
 }
 
 try { main(); } catch (_) { /* nunca romper el arranque de sesión */ }

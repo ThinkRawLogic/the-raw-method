@@ -14,7 +14,7 @@ en prosa 👁, y eso es lo que hace este kit, en dos niveles.
 
 | Pieza | Evento | Qué hace |
 |---|---|---|
-| `raw-session.js` | **SessionStart** | Si el proyecto usa The Raw Method, inyecta el **reflejo del método** en cada sesión, para que la IA no pueda "olvidar" que opera bajo él. Fuera de un proyecto Raw Method, calla. |
+| `raw-session.js` | **SessionStart** | Si el proyecto usa The Raw Method, muestra un **banner visible** al usuario (`systemMessage`) e inyecta el **reflejo del método** en el contexto de la IA (`additionalContext`) en cada sesión, para que la IA no pueda "olvidar" que opera bajo él. Fuera de un proyecto Raw Method, calla. |
 | `raw-gate.js` | **PreToolUse** (Bash/PowerShell) | Intercepta `git commit` y lo **RECHAZA** (exit 2) si una ficha de cobertura marcada como *cerrada* deja una clave sin resolver. También frena un commit que declara `[cierre]` sin ninguna ficha cerrada. |
 
 Lo corre el **harness**, no la IA → la IA no puede decidir no correrlo. **No se evade con
