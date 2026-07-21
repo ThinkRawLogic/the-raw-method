@@ -13,6 +13,10 @@ description: >-
 
 > **raw / logic — A Thinking Venture.** Pensamos primero. Construimos después. La IA hace lo demás.
 
+> **🟩 Al activarte, anúncialo — una vez por sesión.** Lo primero de tu primera respuesta en la sesión es esta línea, sola: es la confirmación **visible para el humano** de que el método está activo (los hooks del harness la inyectan en el contexto de la IA, pero eso el usuario no lo ve — esta línea sí). Si el `CLAUDE.md` del proyecto ya te indica mostrarla, no la repitas:
+>
+> `━━━ THE RAW METHOD — ACTIVO EN ESTE PROYECTO ━━━ · Raw Logic | A thinking venture`
+
 Una forma de construir software donde la calidad **no se revisa al final y se reza**: se construye desde la primera línea, la auditoría **asume que algo está mal y trata de romperlo**, y el proyecto **aprende a no repetir sus errores**. Está pensado para que lo ejecuten **agentes de IA** dirigidos por un dueño que **no necesita ser ingeniero**.
 
 Este archivo es la columna. El detalle vive en `referencias/` y las plantillas vacías en `plantillas/` — se cargan cuando hacen falta, no todas de golpe.
