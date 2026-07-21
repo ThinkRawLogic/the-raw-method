@@ -244,6 +244,7 @@
     <h3>Dos hábitos que lo hacen eficiente</h3>
     <p><strong>Correr solo lo que hace falta.</strong> No se revisan todos los ángulos cada vez, solo los que tocaste. Si pintaste una pared, no reinspeccionas la plomería. <span class="tag">router de pertinencia</span></p>
     <p><strong>Prevenir en vez de curar.</strong> Cuanto más construyes bien desde el principio —con las reglas ya metidas en las piezas que reúsas— menos tiene que encontrar la auditoría. <span class="tag">shift-left</span></p>
+    <p><strong>Un dial de rigor.</strong> Cuánta ceremonia poner no lo adivina la IA — lo elegís vos, con una perilla: <em>liviano</em> para una pantalla interna, <em>normal</em> para el día a día, <em>a fondo</em> (la flota adversaria) para lo que toca dinero o seguridad. Bloque chico, ceremonia chica. <span class="tag">rigor proporcional al riesgo</span></p>
   </section>
 
   <hr class="rule">
@@ -268,6 +269,13 @@
 
     <h3 style="margin-top:1.7rem"><span class="tag" style="background:var(--acid);color:var(--on-acid);border-color:transparent">BLUE TEAM</span> &nbsp;¿Lo estamos vigilando?</h3>
     <p>En producción: <strong>monitoreo y alertas</strong>. Que algo <strong>avise</strong> cuando se rompe, en vez de esperar a que lo reporte un cliente. <span class="tag">refutar-por-defecto · 2 de 3 · tres equipos</span></p>
+
+    <div class="box" style="margin-top:1.4rem">
+      <span class="k">Tres cosas que le dan filo a la auditoría</span>
+      <p><strong>Patrones concretos, no "mirá con ojo".</strong> Cada clase de problema (un secreto filtrado, un cobro doble, un dato que se ejecuta como código) trae el patrón exacto a buscar, con un ejemplo malo y su versión buena. La auditoría corre esos rastreos — no adivina.</p>
+      <p><strong>Banderas rojas contra aflojar.</strong> El peor enemigo de una auditoría es convencerse de que ya está. Una lista de excusas —"ya encontré varios", "se ve prolijo", "no encontré nada"— con su respuesta al lado, para que la IA no se auto-apruebe por pereza.</p>
+      <p><strong>El que audita no puede tocar nada.</strong> Los agentes que revisan corren en <strong>solo lectura</strong>: por diseño no pueden modificar lo que auditan. Un auditor que puede cambiar lo que audita ya no es un auditor.</p>
+    </div>
   </section>
 
   <hr class="rule">
@@ -362,6 +370,15 @@
     <p class="kicker"><span class="idx">08</span>Por qué es distinto (y qué NO hace)</p>
     <h2>Se obliga, se enfoca, se mejora</h2>
     <p>La mayoría de los "checklists de calidad" son un documento que nadie aplica. Este es distinto en tres cosas: <strong>se obliga solo</strong> (candados que frenan el trabajo si algo rompe una regla), <strong>corre solo lo necesario</strong> (no revisa todo cada vez) y <strong>se mejora solo</strong> (cada hallazgo se vuelve regla).</p>
+
+    <div class="box">
+      <span class="k">"Se obliga solo" — cómo, en concreto</span>
+      <p>La promesa "se obliga solo" tiene dientes: tres porteros que la IA <strong>no puede saltar</strong>, porque no los corre ella — los corre la máquina.</p>
+      <p><strong>1 · En cada sesión.</strong> Al arrancar, un recordatorio le mete a la IA las reglas del método en la cabeza, para que no "olvide" que trabaja bajo él — ni siquiera un día cansado.</p>
+      <p><strong>2 · Al guardar.</strong> Si intentás cerrar un bloque con la ficha a medias —una casilla sin resolver, sin el reporte honesto de fortalezas y debilidades, o auditándose a sí misma— el guardado <strong>se cancela</strong>. Y no se esquiva con trucos: el portero se para <em>antes</em> del guardado.</p>
+      <p><strong>3 · En el servidor.</strong> Un vigilante revisa cada cambio que llega, aunque en la compu de alguien no se haya corrido nada localmente. Es la red que atrapa lo que se escapó.</p>
+      <p style="margin-top:.7rem">Y reglas que antes eran solo "acordate" ya son <strong>candados de verdad</strong>: un escáner que no deja guardar si se coló una clave o contraseña en el código, corriendo solo en cada cambio. <span class="tag">reflejo · candado · vigilante</span></p>
+    </div>
     <div class="box">
       <span class="k">El límite honesto</span>
       <p>Hay cosas que ninguna automatización atrapa: un agujero lógico sutil, si algo se <em>siente</em> bien de usar. Eso siempre va a necesitar ojos humanos —o una IA adversaria mirando a propósito—. El método no lo reemplaza: lo hace <strong>más barato</strong>, resolviendo todo lo mecánico de forma automática para que la atención cara se gaste solo en lo genuinamente difícil.</p>
@@ -372,7 +389,7 @@
     <span class="note">Borrador para validar</span>
     <p>Este documento explica <strong>The Raw Method</strong> en lenguaje claro para que cualquiera —sin conocimientos técnicos— entienda qué hace, cómo, cuándo y para qué. Así se puede mejorar, y saber qué puntos ya están cubiertos.</p>
     <p class="anti">No fluff. No licenses. No surprises.</p>
-    <p class="meta">raw <span class="slash" style="color:var(--acid)">/</span> logic · The Raw Method · borrador v2 · 2026</p>
+    <p class="meta">raw <span class="slash" style="color:var(--acid)">/</span> logic · The Raw Method · borrador v3 · 2026</p>
   </footer>
 
 </div>
