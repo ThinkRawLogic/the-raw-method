@@ -148,6 +148,14 @@ Tres bloques obligatorios (un reporte sin alguno se considera **incompleto**, no
 
 ---
 
+## Paso 4b — La lista de "qué revisar" (el OK informado)
+
+El reporte honesto es el agente juzgándose **a sí mismo**. Falta el otro lado: darle al dueño **qué mirar** para dar el OK sin firmar a ciegas. El agente entrega una lista **corta, priorizada y en el idioma del dueño** de lo que ÉL puede verificar por su cuenta (mirar una pantalla, probar un flujo, confirmar un número), lo más importante primero.
+
+🤖 **En una ficha v3 es una sección obligatoria** (*"Qué revisar — para el dueño"*): `raw-gate`/`raw-check` rechazan el cierre si falta o queda vacía. Convierte el OK del Paso 5 de un **sello** en una **decisión**.
+
+---
+
 ## Paso 5 — El OK del dueño (sin esto no hay cierre)
 
 Todo lo de arriba **prepara** el cierre. No lo declara.

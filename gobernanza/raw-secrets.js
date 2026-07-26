@@ -16,6 +16,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const MAX_FILE_KB = 500;
 const MAX_LINE = 2000;
@@ -65,7 +66,7 @@ const PATTERNS = [
   ['npm Token', /npm_[A-Za-z0-9]{36}/i, 'critical', 'npm access token'],
   ['npm Auth Token', /\/\/registry\.npmjs\.org\/:_authToken=\S+/, 'critical', 'npm registry auth token'],
   ['PyPI Token', /pypi-[A-Za-z0-9_-]{50,}/, 'critical', 'PyPI API token'],
-  ['Telegram Bot Token', /[0-9]{8,10}:[A-Za-z0-9_-]{35}/, 'high', 'Telegram bot token'],
+  ['Telegram Bot Token', /[0-9]{8,10}:[A-Za-z0-9_-]{35}/, 'medium', 'Telegram bot token (patrón laxo → reporta, no bloquea)'],
   ['Discord Webhook', /https:\/\/discord(?:app)?\.com\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_-]+/, 'high', 'Discord webhook'],
   ['Shopify Token', /shpat_[a-fA-F0-9]{32}/, 'critical', 'Shopify admin API token'],
   ['Shopify Shared Secret', /shpss_[a-fA-F0-9]{32}/, 'critical', 'Shopify shared secret'],
@@ -85,8 +86,10 @@ const PATTERNS = [
 const TEST_INDICATORS = new Set(['test','tests','spec','specs','mock','mocks','fake','fakes','fixture',
   'fixtures','example','examples','sample','samples','demo','demos','dummy','stub','stubs','seed']);
 
-const ALLOWLIST_WORDS = ['placeholder','your_','your-','xxx','todo','changeme','test_key','replace_me',
-  'insert_','<your','${','{{','sk_test_','pk_test_','example','dummy','fake'];
+// OJO: NADA de '${' ni '{{' acá. Una interpolación de template literal NO es un placeholder —
+// en Next/TS los connection strings reales se arman con `${...}` y quedarían exentos (agujero C10).
+const ALLOWLIST_WORDS = ['placeholder','your_','your-','xxx','changeme','test_key','replace_me',
+  'insert_','<your','sk_test_','pk_test_','example','dummy'];
 
 function esAllowlisted(linea) {
   const l = linea.toLowerCase();
@@ -96,7 +99,10 @@ function esArchivoTest(rel) {
   return rel.toLowerCase().replace(/\\/g, '/').split('/').some((parte) =>
     parte.split(/[-_./]/).some((seg) => TEST_INDICATORS.has(seg)));
 }
-function bajarSeveridad(sev) { return sev === 'critical' ? 'medium' : sev === 'high' ? 'low' : sev; }
+// Un secreto CRITICAL (AWS key, connection string con credenciales) NUNCA se degrada por estar
+// en un archivo test/demo/seed: un secreto real ahí sigue siendo un secreto real. Solo bajamos
+// los 'high' (patrones más laxos) para no gritar en fixtures.
+function bajarSeveridad(sev) { return sev === 'high' ? 'low' : sev; }
 
 function skipFile(nombre, ext, sizeBytes) {
   if (SKIP_FILES.has(nombre)) return true;
@@ -111,7 +117,7 @@ function walk(dir, out) {
   try { entradas = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
   for (const e of entradas) {
     if (e.isDirectory()) {
-      if (SKIP_DIRS.has(e.name) || e.name.startsWith('.')) continue;
+      if (SKIP_DIRS.has(e.name)) continue; // NO saltear todo dot-dir: .github/, .circleci/ etc. SÍ se commitean
       walk(path.join(dir, e.name), out);
     } else if (e.isFile()) {
       out.push(path.join(dir, e.name));
@@ -136,6 +142,13 @@ function scanFile(filepath, root, findings) {
     for (const [name, rx, sev, desc] of PATTERNS) {
       if (rx.test(linea)) {
         if (esAllowlisted(linea)) continue;
+        // Conexión a un host LOCAL (dev/CI/.env.example) NO es un secreto filtrado.
+        if (/Connection/i.test(name) && /@(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?|host\.docker\.internal)/i.test(linea)) continue;
+        // Password/secret hardcodeado cuyo VALOR es un default débil conocido (nunca un secreto real).
+        if (/Hardcoded|Env (?:Password|Secret|API)/i.test(name)) {
+          const vm = linea.match(/['"]([^'"]{1,40})['"]/);
+          if (vm && /^(?:postgres|admin|root|password|passwd|changeme|secret|example|test|user|dev|guest|public)$/i.test(vm[1])) continue;
+        }
         const severidad = esTest ? bajarSeveridad(sev) : sev;
         let ev = linea.trim(); if (ev.length > 160) ev = ev.slice(0, 160) + '...';
         findings.push({ type: name, severity: severidad, file: rel, line: i + 1, description: desc, evidence: ev });
@@ -159,12 +172,26 @@ function checkGitignore(root, findings) {
   }
 }
 
+// Un scanner de secretos SHIFT-LEFT solo debe mirar lo que se va a COMMITEAR. Los archivos
+// gitignored (.env, .env.local, .env.deploy.local, código generado) son locales por diseño y
+// NUNCA entran al repo → flaguearlos es ruido que apaga el candado. Los saltamos.
+function gitIgnorados(root, archivos) {
+  try {
+    const rels = archivos.map((f) => path.relative(root, f).replace(/\\/g, '/'));
+    const r = spawnSync('git', ['-C', root, 'check-ignore', '--stdin'], { input: rels.join('\n'), encoding: 'utf8' });
+    if (r.error || r.status === 128) return new Set(); // no es repo git / git ausente → no filtrar
+    return new Set((r.stdout || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean));
+  } catch (_) { return new Set(); }
+}
+
 function escanear(dir) {
   const root = path.resolve(dir);
   const archivos = [];
   walk(root, archivos);
+  const ign = gitIgnorados(root, archivos);
+  const visibles = ign.size ? archivos.filter((f) => !ign.has(path.relative(root, f).replace(/\\/g, '/'))) : archivos;
   const findings = [];
-  for (const f of archivos) scanFile(f, root, findings);
+  for (const f of visibles) scanFile(f, root, findings);
   checkGitignore(root, findings);
   return findings;
 }

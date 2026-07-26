@@ -33,6 +33,8 @@ Cada regla del método declara **cómo se hace cumplir**. Hay tres niveles, y la
 
 **La meta permanente es vaciar la capa 📖.** Cuando un método de calidad vive solo en la memoria de la gente, no se aplica — se olvida. Por eso The Raw Method convierte reglas en candados siempre que puede.
 
+**Y una regla sobre las reglas: "📖 se gana, no se asume."** 📖 no es el default ni el camino de menor resistencia — es una conclusión que hay que *ganarse*. Antes de marcar algo como 📖, el agente **debe**: (a) considerar **en voz alta** si puede ser 🤖 —incluido un candado **parcial/proxy** o un **juez-IA en el loop**, no solo un test perfecto— y dejar escrito *por qué no*; y (b) si aun así queda en 📖/👁, **surfacear al dueño la opción de candado y su costo**, nunca decidirlo en silencio. Ocultar que algo *era* automatizable es el mismo bug que ocultar una debilidad: el dueño no puede pedir un candado que no sabe que era posible.
+
 **Dónde viven los candados 🤖 — en dos planos.** En el **código** (`candados/`, el arnés que frena el `git commit`) y en el **proceso** de la propia IA (`gobernanza/`, hooks del harness — el "Nivel 1"). La gobernanza cierra un hueco que el arnés no toca: que la IA simplemente *no corra el método*. El reflejo del método se inyecta en cada sesión, y un cierre con la ficha sin resolver se rechaza a nivel del harness (no lo evade `--no-verify`). Detalle en `gobernanza/README.md`.
 
 **Aclaración clave cuando un candado necesita una herramienta externa.** Algunos candados 🤖 dependen de una herramienta que **cambia según el proyecto**: un verificador de licencias, o un *arnés de contract testing* (un banco de pruebas que avisa si le cambiaste la forma a un dato que otra pieza ya usa). Que un proyecto **todavía no la tenga** no lo deja afuera del método ni le impone nada — pero **tampoco es un pase libre**. La regla no baja a 📖; se sostiene con dientes:
@@ -105,6 +107,26 @@ Pero **no es puro adversario** —eso desmoraliza y tampoco es honesto—: es **
 **Candado:** ninguna entrega ni cierre está completo sin su renglón de **Fortalezas / Debilidades / Qué falta o puede mejorar** — igual que un reporte de auditoría no está completo sin el *"qué NO se alcanzó a probar"*. Un cierre sin eso se considera **incompleto**, no cerrado. (Es el mismo patrón de la ficha de cobertura: un campo obligatorio que no se puede saltear.) **Ya es un candado 🤖 real:** `gobernanza/raw-gate` y `raw-check` rechazan el cierre si una ficha cerrada no trae las tres secciones (Fortalezas · Debilidades · Qué NO se probó) o si quedaron vacías.
 
 **Y la procedencia de lo que el agente afirma del mundo** (👁 — depende de que el agente lo declare; no se automatiza detectar que un hecho del mundo no fue comprobado). Cuando el agente aporta un dato que **no puede verificar** contra el sistema —una ley, una regla fiscal, un hecho externo—, lo marca como **suyo y sin verificar**, no como verdad establecida. *"Esto lo digo yo, no lo comprobé"* pesa distinto que *"esto lo verifiqué"*. Y si ese dato **resulta falso**, la decisión que se construyó encima **se reabre** — no queda firme sobre un supuesto que se cayó. Es la misma humildad que exige la criba a la IA que juzga código: separar lo que sé de lo que creo.
+
+---
+
+## La claridad primero (el principio de Feynman)
+
+Si el agente no lo puede explicar simple, no lo entendió del todo — y el dueño, que no es ingeniero, necesita entender para dirigir y dar el OK. Por eso *cómo* se lo explica es parte del trabajo, no cortesía.
+
+**Regla operativa:** la primera línea es la **recomendación a aprobar** (la conclusión, no el preámbulo); el sustento va debajo, en capas salteables. Llano y con analogías — la jerga vive en los documentos. Y un piso contra el reflejo de comprimir: *"esencial primero"* no es *"esencial y nada más"* — si hay un **tradeoff material** para el OK, entra aunque alargue.
+
+**El doble filo (por eso agiliza el trabajo, no solo la lectura):** explicar simple obliga al agente a verificar *su propio* entendimiento **antes** de construir, no después. La claridad hacia afuera destapa los huecos hacia adentro.
+
+**Capa: 📖 con 👁 de respaldo.** "Claridad" no se mide con un candado (es semántico); el dueño es el detector — si el agente cae en jerga o entierra la conclusión, se nota al instante. (El residuo "¿faltó un tradeoff material?" es candidato a un juez-IA en el cierre; ver `referencias/candados-y-capas.md`.)
+
+---
+
+## El OK informado (qué te toca revisar)
+
+El cierre termina con el **OK del dueño** (el freno de mano) — pero un OK a ciegas no es un OK. La honestidad proactiva de arriba es el agente juzgando *su propio* trabajo; esto es el otro lado: junto al reporte honesto, el agente le entrega al dueño una lista **corta, priorizada y en su idioma** de lo que *él* puede verificar por su cuenta (mirar una pantalla, probar un flujo, confirmar un número), lo más importante primero. Convierte el OK de un **sello** en una **decisión**.
+
+**Capa: candado 🤖.** Es una sección obligatoria de la ficha de cierre (*"Qué revisar — para el dueño"*), gateada por un marcador de versión (`raw-ficha: v3`) para no romper fichas viejas. Un cierre v3 sin ella —o con la lista vacía— se rechaza, igual que sin el reporte 50/50. (`gobernanza/raw-cobertura.js`.)
 
 ---
 

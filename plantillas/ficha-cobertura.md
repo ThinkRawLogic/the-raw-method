@@ -1,4 +1,6 @@
 # Ficha de cobertura — bloque [Nº / nombre]
+<!-- raw-ficha: v3 -->  <!-- NO borrar: activa el candado del "OK informado" (sección "Qué revisar"). -->
+
 
 > **Plantilla de The Raw Method.** Al CERRAR un bloque de trabajo, copia esta ficha y **resuelve cada clave**:
 > márcala `[x]` y **reemplaza el `___` de esa clave** con tu nota de CÓMO se cumplió (o `N/A — <por qué no aplica>`).
@@ -61,4 +63,14 @@ ___
 ___
 
 ### Qué NO se alcanzó a probar (lo más importante)
+___
+
+---
+
+## Qué revisar — para el dueño (obligatorio al cerrar, v3)
+
+> Lista **corta, priorizada y en el idioma del dueño** de lo que ÉL puede verificar por su cuenta antes de dar el OK: mirar una pantalla, probar un flujo, confirmar un número. **Lo más importante primero.** Convierte el OK de un sello en una decisión.
+>
+> **El candado la exige** en toda ficha v3 (marcador `raw-ficha: v3` arriba): sin ella —o con la lista vacía— el cierre está **incompleto**, no cerrado. No juzga si la lista es *buena* (eso lo decide el dueño); garantiza que EXISTE.
+
 ___

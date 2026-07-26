@@ -19,6 +19,7 @@ const CHECK = path.join(HERE, 'raw-check.js');
 const SECRETS = path.join(HERE, 'raw-secrets.js');
 const DEPS = path.join(HERE, 'raw-deps.js');
 const DEUDA = path.join(HERE, 'raw-deuda.js');
+const SILENCIADO = path.join(HERE, 'raw-silenciado.js');
 
 let fallos = 0;
 function check(nombre, cond) {
@@ -78,6 +79,13 @@ function fichaLegacy(cerrada) { // sin campos de auditor ni honestidad → solo 
   const fecha = cerrada ? '2026-07-20' : '___________';
   return `# Ficha vieja\n\n**Fecha de cierre:** ${fecha}\n\n## Claves\n\n${KEYS_OK().join('\n')}\n`;
 }
+// v3 — OK informado: la lista "qué revisar" para el dueño (solo se exige con el marcador).
+const REVISION_OK = '\n\n## Qué revisar — para el dueño\n\nmirá la pantalla de pagos y confirmá que el total da bien.\n';
+const REVISION_VACIA = '\n\n## Qué revisar — para el dueño\n\n___\n';
+function fichaV3(cerrada, revision) { // revision: 'ok' | 'vacia' | undefined (falta)
+  const rev = revision === 'ok' ? REVISION_OK : revision === 'vacia' ? REVISION_VACIA : '';
+  return '<!-- raw-ficha: v3 -->\n' + base(cerrada, KEYS_OK()) + HONESTO + rev;
+}
 
 function correrGate(command, dir) {
   const r = spawnSync('node', [GATE], { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: dir }), encoding: 'utf8' });
@@ -87,6 +95,10 @@ function correrSession(dir) { return spawnSync('node', [SESSION], { input: JSON.
 function correrCheck(dir) { const r = spawnSync('node', [CHECK, dir], { encoding: 'utf8' }); return { code: r.status, out: (r.stdout || '') + (r.stderr || '') }; }
 
 const con = (sufijo, ficha) => { const d = tmpProyecto(sufijo); marcarMetodo(d); if (ficha) ponerFicha(d, 'b.md', ficha); return d; };
+// Helpers de git para el router (C3): repo real + staging.
+function gitInit(dir) { spawnSync('git', ['init', '-q'], { cwd: dir }); }
+function gitStage(dir, file, content) { const p = path.join(dir, file); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, content); spawnSync('git', ['add', file], { cwd: dir }); }
+function fichaConNA(claveNA) { const l = CLAVES.map((c) => c === claveNA ? `- [x] **(${c})** N/A — no aplica.` : `- [x] **(${c})** algo. → hecho tal cosa`); return base(true, l) + HONESTO; }
 
 // ============================ Nivel 1 — raw-gate (hook) ======================
 { const d = con('muda', fichaConClaveMuda(true)); const r = correrGate('git commit -m "x"', d);
@@ -128,6 +140,15 @@ const con = (sufijo, ficha) => { const d = tmpProyecto(sufijo); marcarMetodo(d);
   check('gate: rastro que existe y no vacío → PERMITIDO', correrGate('git commit -m x', d).code === 0); }
 { check('check: auto-auditada → FALLA (exit 1)', correrCheck(con('caa', fichaAutoAuditada(true))).code === 1); }
 
+// =================== Nivel 3.3 — OK informado (lista "qué revisar", v3) ======
+{ const r = correrGate('git commit -m x', con('v3sinrev', fichaV3(true)));
+  check('gate: ficha v3 cerrada SIN "qué revisar" → BLOQUEADO', r.code === 2);
+  check('gate:   · pide la sección de revisión', /revisar/i.test(r.err)); }
+{ check('gate: ficha v3 con lista de revisión real → PERMITIDO', correrGate('git commit -m x', con('v3ok', fichaV3(true, 'ok'))).code === 0); }
+{ check('gate: ficha v3 con "qué revisar" VACÍA → BLOQUEADO', correrGate('git commit -m x', con('v3vac', fichaV3(true, 'vacia'))).code === 2); }
+{ check('gate: ficha SIN marcador v3 y sin "qué revisar" → PERMITIDO (no rompe v1/v2)', correrGate('git commit -m x', con('nov3', fichaResuelta(true))).code === 0); }
+{ check('gate: ficha v3 ABIERTA sin revisión → PERMITIDO (solo al cerrar)', correrGate('git commit -m wip', con('v3open', fichaV3(false))).code === 0); }
+
 // ============== Nivel 4 — REGRESIONES del red-team adversario ================
 
 // R1: clave [x] con la NOTA borrada (o placeholder tras →) → muda → BLOQUEA
@@ -153,6 +174,9 @@ const con = (sufijo, ficha) => { const d = tmpProyecto(sufijo); marcarMetodo(d);
 
 // R5: ficha LEGACY (15 claves, sin honestidad ni auditor) → grandfathered (solo cobertura)
 { check('R5 gate: ficha legacy resuelta (sin campos v2) → PERMITIDO (no brickea repos viejos)', correrGate('git commit -m x', con('legacy', fichaLegacy(true))).code === 0); }
+// C26: la MISMA ficha legacy pero cerrada en/después de la fecha de adopción → ya NO se grandfathera.
+{ const texto = `# Ficha nueva\n\n**Fecha de cierre:** 2026-07-25\n\n## Claves\n\n${KEYS_OK().join('\n')}\n`;
+  check('C26 gate: ficha legacy con fecha >= adopción → BLOQUEADO (exige v2, no grandfathering)', correrGate('git commit -m x', con('c26', texto)).code === 2); }
 
 // R6: fichas con marcador de lista `*` (Markdown válido) → se parsean las claves
 { const l = CLAVES.map((c) => `* [x] **(${c})** algo. → hecho`); const d = con('star', base(true, l) + HONESTO);
@@ -169,9 +193,109 @@ function correr(script, dir) { const r = spawnSync('node', [script, dir], { enco
 { const d = tmpProyecto('sec-ph'); fs.writeFileSync(path.join(d, 'app.js'), 'const api_key = "your_placeholder_value_here";\n');
   check('secrets: placeholder (your_...) → OK (allowlist, no falso positivo)', correr(SECRETS, d).code === 0); }
 { const d = tmpProyecto('deps'); fs.writeFileSync(path.join(d, 'package.json'), '{}');
-  const r = correr(DEPS, d); check('deps: package.json sin lockfile → lo reporta (exit 0, advisory)', r.code === 0 && /package\.json/.test(r.out)); }
+  const r = correr(DEPS, d); check('deps: package.json sin lockfile → BLOQUEA (exit 1, C43)', r.code === 1 && /package\.json/.test(r.out)); }
+{ const d = tmpProyecto('deps-optout'); fs.writeFileSync(path.join(d, 'package.json'), '{}'); fs.writeFileSync(path.join(d, '.raw-deps-advisory'), '');
+  check('deps: sin lock + opt-out (.raw-deps-advisory) → OK (exit 0, C43)', correr(DEPS, d).code === 0); }
 { const d = tmpProyecto('deuda'); fs.writeFileSync(path.join(d, 'x.js'), '// raw-deuda: cablear el candado de X antes de prod\n');
   const r = correr(DEUDA, d); check('deuda: cosecha el marcador raw-deuda: (exit 0)', r.code === 0 && /cablear el candado/.test(r.out)); }
+{ const d = tmpProyecto('deuda-venc'); fs.writeFileSync(path.join(d, 'x.js'), '// raw-deuda: cablear candado X antes: 2020-01-01\n');
+  const r = correr(DEUDA, d); check('deuda: `antes:` VENCIDA → BLOQUEA (exit 1, C38)', r.code === 1 && /VENCIDA/.test(r.out)); }
+{ const d = tmpProyecto('deuda-fut'); fs.writeFileSync(path.join(d, 'x.js'), '// raw-deuda: cablear candado X antes: 2099-12-31\n');
+  const r = correr(DEUDA, d); check('deuda: `antes:` futura → OK (exit 0, advisory)', r.code === 0 && /2099-12-31/.test(r.out)); }
+
+// C10 — el gate escanea secretos AL COMMIT (shift-left), no solo en CI:
+{ const d = con('c10-leak'); fs.writeFileSync(path.join(d, 'leak.js'), 'const k = "' + ('AKIA' + '1234567890ABCDEF') + '";\n');
+  const r = correrGate('git commit -m x', d);
+  check('C10 gate: commit con secreto (AWS key) → BLOQUEADO (shift-left)', r.code === 2);
+  check('C10   · nombra el secreto', /SECRETO|AWS/i.test(r.err)); }
+{ check('C10 gate: commit sin secreto (ficha resuelta) → PERMITIDO', correrGate('git commit -m x', con('c10-clean', fichaResuelta(true))).code === 0); }
+
+// C39 — un candado del método no se apaga en silencio (test .skip sin registro):
+{ const d = tmpProyecto('sil-clean'); fs.writeFileSync(path.join(d, 'a.test.js'), 'it("works", () => {});\n');
+  check('C39 silenciado: sin skips → OK (exit 0)', correr(SILENCIADO, d).code === 0); }
+{ const d = tmpProyecto('sil-bad'); fs.writeFileSync(path.join(d, 'a.test.js'), 'it.skip("later", () => {});\n');
+  check('C39 silenciado: it.skip sin registro → BLOQUEA (exit 1)', correr(SILENCIADO, d).code === 1); }
+{ const d = tmpProyecto('sil-ok'); fs.writeFileSync(path.join(d, 'a.test.js'), 'it.skip("later", () => {}); // raw-ok: flaky conocido, ver #123\n');
+  check('C39 silenciado: it.skip con raw-ok → OK (exit 0)', correr(SILENCIADO, d).code === 0); }
+
+// C3 — router core (puro + integración con git staged):
+{ const { clavesRequeridas } = require('./raw-router');
+  check('C3 router: *_cents → concurrencia', clavesRequeridas(['src/pago_cents.ts'], '').has('concurrencia'));
+  check('C3 router: package.json → stack', clavesRequeridas(['package.json'], '').has('stack'));
+  check('C3 router: fetch( → errores', clavesRequeridas([], 'await fetch("http://x")').has('errores'));
+  check('C3 router: migración .sql → dato', clavesRequeridas(['prisma/migrations/001_x/migration.sql'], '').has('dato'));
+  check('C3 router: diff neutro → nada', clavesRequeridas(['README.md'], 'texto normal').size === 0); }
+{ const d = con('router-na', fichaConNA('concurrencia')); gitInit(d); gitStage(d, 'pago_cents.js', 'const amount_cents = 1;\n');
+  check('C3 router: diff toca dinero pero (concurrencia)=N/A → BLOQUEADO', correrGate('git commit -m "[cierre] b"', d).code === 2); }
+{ const d = con('router-ok', fichaResuelta(true)); gitInit(d); gitStage(d, 'pago_cents.js', 'const amount_cents = 1;\n'); gitStage(d, 'BITACORA.md', '# b\ncerrado\n');
+  check('C3 router: diff toca dinero y clave resuelta (no N/A) → PERMITIDO', correrGate('git commit -m "[cierre] b"', d).code === 0); }
+
+// C13 — cerrar un bloque exige tocar bitácora/pendientes en el MISMO commit:
+{ const d = con('c13-nodoc', fichaResuelta(true)); gitInit(d); gitStage(d, 'app.js', 'const x = 1;\n');
+  check('C13 gate: [cierre] sin tocar bitácora/pendientes → BLOQUEADO', correrGate('git commit -m "[cierre] b"', d).code === 2); }
+{ const d = con('c13-doc', fichaResuelta(true)); gitInit(d); gitStage(d, 'app.js', 'const x = 1;\n'); gitStage(d, 'BITACORA.md', '# bitacora\nbloque cerrado\n');
+  check('C13 gate: [cierre] con BITACORA.md tocada → PERMITIDO', correrGate('git commit -m "[cierre] b"', d).code === 0); }
+
+// C4 — freno de mano (opt-in .raw-fondo-on; whitelist .raw-fondo-allow; bypass RAW_FONDO_OK=1):
+{ const d = con('c4-off'); check('C4: sin flag → rm -rf PERMITIDO (dormant, no cambia el entorno)', correrGate('rm -rf build', d).code === 0); }
+{ const d = con('c4-on'); fs.writeFileSync(path.join(d, '.raw-fondo-on'), '');
+  check('C4: flag on → vercel deploy → BLOQUEADO', correrGate('vercel deploy --prod', d).code === 2);
+  check('C4: flag on → rm -rf → BLOQUEADO', correrGate('rm -rf build', d).code === 2);
+  check('C4: flag on → git push --force → BLOQUEADO', correrGate('git push --force origin main', d).code === 2);
+  check('C4: flag on → comando normal (ls) → PERMITIDO', correrGate('ls -la', d).code === 0); }
+{ const d = con('c4-bypass'); fs.writeFileSync(path.join(d, '.raw-fondo-on'), '');
+  check('C4: flag on + RAW_FONDO_OK=1 → PERMITIDO (OK del dueño)', correrGate('RAW_FONDO_OK=1 vercel deploy --prod', d).code === 0); }
+{ const d = con('c4-allow'); fs.writeFileSync(path.join(d, '.raw-fondo-on'), ''); fs.writeFileSync(path.join(d, '.raw-fondo-allow'), '# confianza\nvercel deploy\n');
+  check('C4: flag on + patrón en .raw-fondo-allow → PERMITIDO', correrGate('vercel deploy --prod', d).code === 0); }
+
+// ============== REGRESIONES DE LA AUDITORÍA ADVERSARIA (bypasses cazados) ============
+// C10 — secretos reales que pasaban:
+{ const d = tmpProyecto('sec-github'); fs.mkdirSync(path.join(d, '.github', 'workflows'), { recursive: true });
+  fs.writeFileSync(path.join(d, '.github', 'workflows', 'deploy.yml'), 'aws: ' + ('AKIA' + 'IOSFODNN7ABCDEFG') + '\n');
+  check('C10 regr: secreto en .github/ → BLOQUEA (dot-dir commiteable ya se escanea)', correr(SECRETS, d).code === 1); }
+{ const d = tmpProyecto('sec-seed'); fs.mkdirSync(path.join(d, 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'scripts', 'seed-demo.ts'), 'const k = "' + ('AKIA' + 'IOSFODNN7ABCDEFG') + '";\n');
+  check('C10 regr: secreto critical en seed-demo → BLOQUEA (critical no se degrada)', correr(SECRETS, d).code === 1); }
+{ const d = tmpProyecto('sec-interp'); fs.writeFileSync(path.join(d, 'conn.ts'), 'const u = `postgres://user:' + 'realpass123@db.host:5432/prod?x=${y}`;\n');
+  check('C10 regr: connection string con ${} → BLOQUEA (sin allowlist de interpolación)', correr(SECRETS, d).code === 1); }
+// C10 — exenciones legítimas del Portal (localhost, defaults débiles) NO bloquean; prod SÍ:
+{ const d = tmpProyecto('sec-localhost'); fs.writeFileSync(path.join(d, '.env.example'), 'DATABASE_URL="postgresql://app:' + 'secret123@localhost:5432/db"\n');
+  check('C10 regr: conexión a localhost → NO bloquea (dev/CI/example)', correr(SECRETS, d).code === 0); }
+{ const d = tmpProyecto('sec-weakpw'); fs.writeFileSync(path.join(d, 'pg.mjs'), 'const SUPER_PASSWORD = "postgres";\n');
+  check('C10 regr: password default débil ("postgres") → NO bloquea', correr(SECRETS, d).code === 0); }
+{ const d = tmpProyecto('sec-prod'); fs.writeFileSync(path.join(d, 'conn.ts'), 'const u = "postgres://app:' + 'Xk9realProdPass@db.prod.aws.com:5432/main";\n');
+  check('C10 regr: conexión a host de PROD (no localhost) → SÍ bloquea', correr(SECRETS, d).code === 1); }
+// C39 — silenciamientos que pasaban:
+{ const d = tmpProyecto('sil-fit'); fs.writeFileSync(path.join(d, 'a.test.js'), 'fdescribe("x", () => { fit("y", () => {}); });\n');
+  check('C39 regr: fit()/fdescribe() (focus, apaga la suite) → BLOQUEA', correr(SILENCIADO, d).code === 1); }
+{ const d = tmpProyecto('sil-skipif'); fs.writeFileSync(path.join(d, 'a_test.py'), '@pytest.mark.skipif(True)\ndef test_x(): pass\n');
+  check('C39 regr: @pytest.mark.skipif → BLOQUEA', correr(SILENCIADO, d).code === 1); }
+// C38 — deudas vencidas que pasaban:
+{ const d = tmpProyecto('deuda-mjs'); fs.writeFileSync(path.join(d, 'migrate.mjs'), '// raw-deuda: cablear X antes: 2020-01-01\n');
+  check('C38 regr: deuda vencida en .mjs → BLOQUEA (mjs ahora se escanea)', correr(DEUDA, d).code === 1); }
+{ const d = tmpProyecto('deuda-nopad'); fs.writeFileSync(path.join(d, 'x.js'), '// raw-deuda: cablear X antes: 2020-1-1\n');
+  check('C38 regr: fecha vencida NO zero-padded (2020-1-1) → BLOQUEA', correr(DEUDA, d).code === 1); }
+// C43 — lockfile vacío que pasaba:
+{ const d = tmpProyecto('deps-empty'); fs.writeFileSync(path.join(d, 'package.json'), '{}'); fs.writeFileSync(path.join(d, 'package-lock.json'), '');
+  check('C43 regr: lockfile VACÍO (0 bytes) → BLOQUEA (no cuenta como lock)', correr(DEPS, d).code === 1); }
+// C26 — fichas nuevas que esquivaban honestidad/revisión:
+{ const texto = `# Ficha\n\n**Fecha de cierre:** 01/08/2026\n\n## Claves\n\n${KEYS_OK().join('\n')}\n`;
+  check('C26 regr: ficha legacy con fecha NO-ISO (01/08/2026) → BLOQUEA', correrGate('git commit -m x', con('c26-slash', texto)).code === 2); }
+{ const nueva = (base(true, KEYS_OK()) + HONESTO).replace('2026-07-20', '2026-08-01');
+  check('C26 regr: ficha cerrada >= adopción sin "Qué revisar" → BLOQUEA (obligatoria post-adopción)', correrGate('git commit -m x', con('c26-rev', nueva)).code === 2); }
+// C3 — esNA en español:
+{ const { esNA } = require('./raw-router');
+  check('C3 regr: esNA("No aplica") → true', esNA('No aplica — no hay concurrencia') === true);
+  check('C3 regr: esNA("No corresponde") → true', esNA('No corresponde') === true);
+  check('C3 regr: esNA("no aplicamos redondeo, usamos enteros") → false (nota real, no N/A)', esNA('no aplicamos redondeo, usamos enteros') === false); }
+// C4 — Windows rm + falso positivo del mensaje citado:
+{ const d = con('c4-ps'); fs.writeFileSync(path.join(d, '.raw-fondo-on'), '');
+  check('C4 regr: Remove-Item -Recurse -Force → BLOQUEA (rm -rf de Windows)', correrGate('Remove-Item -Recurse -Force build', d).code === 2); }
+{ const d = con('c4-msg'); fs.writeFileSync(path.join(d, '.raw-fondo-on'), '');
+  check('C4 regr: git commit -m "truncate table logic" → PERMITIDO (no bloquea por mensaje citado)', correrGate('git commit -m "truncate table logic"', d).code === 0); }
+// C13 — señuelo de nombre:
+{ const d = con('c13-decoy', fichaResuelta(true)); gitInit(d); gitStage(d, 'src/changelog.ts', 'export const x = 1;\n');
+  check('C13 regr: señuelo src/changelog.ts (no .md) → BLOQUEADO (no engaña)', correrGate('git commit -m "[cierre] b"', d).code === 2); }
 
 process.stdout.write(`\n${fallos === 0 ? '✅ TODO EN VERDE' : `❌ ${fallos} fallo(s)`}\n`);
 process.exit(fallos === 0 ? 0 : 1);

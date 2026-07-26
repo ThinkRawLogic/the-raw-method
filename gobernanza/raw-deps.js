@@ -3,8 +3,9 @@
  * raw-deps.js — chequeo liviano de lockfiles (pilar Stack, ejecutable).
  * ====================================================================
  * Inspirado en check_lockfiles de cyber-neo. Un manifest sin su lockfile = build
- * NO reproducible (una dependencia puede cambiar sola entre instalaciones). Lo
- * REPORTA (advisory, exit 0) — no bloquea, para no frenar proyectos chicos.
+ * NO reproducible (una dependencia puede cambiar sola entre instalaciones).
+ * C43: FALTA un lock → exit 1 (BLOQUEA). Opt-out para proyectos chicos:
+ *   RAW_DEPS_ADVISORY=1   o un archivo   .raw-deps-advisory   → vuelve a exit 0.
  *
  *   node gobernanza/raw-deps.js [dir]
  */
@@ -26,7 +27,7 @@ function faltantes(dir) {
   const out = [];
   for (const [manifest, locks] of PARES) {
     const hayManifest = fs.existsSync(path.join(dir, manifest));
-    const hayLock = locks.some((l) => fs.existsSync(path.join(dir, l)));
+    const hayLock = locks.some((l) => { try { return fs.statSync(path.join(dir, l)).size > 0; } catch (_) { return false; } }); // lockfile VACÍO no cuenta (C43)
     if (hayManifest && !hayLock) out.push({ manifest, esperados: locks });
   }
   return out;
@@ -38,8 +39,11 @@ if (require.main === module) {
   const dir = process.argv[2] || process.cwd();
   const f = faltantes(dir);
   if (!f.length) { console.log('✓ raw-deps OK — cada manifest tiene su lockfile (o no hay manifests).'); process.exit(0); }
-  console.log(`⚠ raw-deps — ${f.length} manifest(s) sin lockfile (build no reproducible):`);
-  for (const x of f) console.log(`  · ${x.manifest} → falta uno de: ${x.esperados.join(', ')}`);
-  console.log('\nCommiteá el lockfile para fijar versiones exactas — así una dep no cambia sola.');
-  process.exit(0); // advisory
+  console.error(`⛔ raw-deps — ${f.length} manifest(s) sin lockfile (build no reproducible):`);
+  for (const x of f) console.error(`  · ${x.manifest} → falta uno de: ${x.esperados.join(', ')}`);
+  console.error('\nCommiteá el lockfile para fijar versiones exactas — así una dep no cambia sola.');
+  // C43: opt-out explícito para proyectos chicos (no un aviso que nadie lee).
+  const advisory = process.env.RAW_DEPS_ADVISORY === '1' || fs.existsSync(path.join(dir, '.raw-deps-advisory'));
+  if (advisory) { console.error('(modo advisory: RAW_DEPS_ADVISORY=1 o .raw-deps-advisory presente — no bloquea)'); process.exit(0); }
+  process.exit(1); // falta lock → bloquea
 }

@@ -303,6 +303,107 @@ describe.skip("candado: un bloque cerrado no deja TODO/FIXME adentro", () => {
   });
 });
 
+// ===========================================================================
+// EJEMPLO E — EL DINERO SE GUARDA EN CENTAVOS ENTEROS, NUNCA EN FLOAT (dominio: dinero)
+// ---------------------------------------------------------------------------
+// Qué caza: una columna de dinero declarada como Float/Decimal/Real en el schema.
+// Los floats acumulan polvo de redondeo (0.1 + 0.2 ≠ 0.3); en una app de plata, ese
+// polvo descuadra los libros. La regla: dinero = enteros (centavos); la vista divide
+// por 100 al mostrar.
+// Por qué importa: es un bug de DINERO, el downside más caro — no baja de "a fondo".
+//
+// Al copiar: ajusta MONEY_HINT a cómo nombras tus columnas de plata y RUTA_SCHEMA a
+// dónde vive tu schema (Prisma por defecto).
+// ===========================================================================
+
+describe.skip("candado: el dinero se guarda en centavos enteros, no en float", () => {
+  it("ninguna columna de dinero es Float/Decimal en el schema", () => {
+    const RUTA_SCHEMA = [join("prisma", "schema.prisma"), "schema.prisma"]
+      .map((r) => join(REPO_ROOT, r))
+      .find((r) => existsSync(r));
+    if (!RUTA_SCHEMA) return; // sin schema, no aplica
+
+    // Palabras que delatan una columna de dinero. Ajusta a tu dominio.
+    const MONEY_HINT = /(cents|precio|saldo|monto|importe|price|amount|balance|cobro|pago)/i;
+    const TIPO_FLOTANTE = /\b(Float|Decimal|Real|Double|Numeric)\b/;
+
+    const infractores: string[] = [];
+    readFileSync(RUTA_SCHEMA, "utf8")
+      .split("\n")
+      .forEach((linea, i) => {
+        if (MONEY_HINT.test(linea) && TIPO_FLOTANTE.test(linea)) {
+          infractores.push(`${relative(REPO_ROOT, RUTA_SCHEMA)}:${i + 1}  ${linea.trim()}`);
+        }
+      });
+
+    expect(
+      infractores,
+      `\nColumnas de dinero declaradas como float (acumulan redondeo):\n  - ${infractores.join("\n  - ")}\n` +
+        `Guarda el dinero como entero (centavos: Int/BigInt) y divide por 100 al mostrar.\n`,
+    ).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// EJEMPLO F — TODA LLAMADA SALIENTE A UN TERCERO TIENE TIMEOUT (dominio: errores)
+// ---------------------------------------------------------------------------
+// Qué caza: un fetch(...) sin señal de aborto/timeout. Un tercero lento que nunca
+// responde te cuelga a vos: sin reloj, la request espera para siempre y congela el
+// flujo (un checkout, un login). La regla: ninguna salida sin "me desconecto en N seg".
+// Por qué importa: es la diferencia entre "un proveedor lento" y "mi app caída".
+//
+// PISO: chequea por línea; un fetch con el signal en otra línea puede dar falso
+// positivo → márcalo con // candado:ok y el motivo. Si usas axios/got/undici, suma su patrón.
+// ===========================================================================
+
+describe.skip("candado: toda llamada saliente tiene timeout", () => {
+  it("ningún fetch() sale sin AbortSignal/timeout", () => {
+    const esFetch = /\bfetch\s*\(/;
+    const tieneReloj = /(signal|AbortSignal|timeout|AbortController)/i;
+    const permitido = (l: string) => /candado:ok/i.test(l);
+
+    const infractores = escanearFuente(esFetch, (l) => !tieneReloj.test(l) && !permitido(l));
+
+    expect(
+      infractores,
+      `\nLlamadas salientes sin timeout (pueden colgar tu app):\n  - ${infractores.join("\n  - ")}\n` +
+        `Pasa un AbortSignal con timeout (AbortSignal.timeout(ms)) a cada fetch, ` +
+        `o marca // candado:ok con el motivo.\n`,
+    ).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// EJEMPLO G — NOMBRES QUE DICEN LO QUE HACEN (dominio: orden y claridad)
+// ---------------------------------------------------------------------------
+// Qué caza: un identificador mudo (data, tmp, foo, val, thing) o con sufijo numérico
+// de pereza (handleClick2, item3). Un nombre que no dice nada obliga a leer el cuerpo
+// para entenderlo; multiplicado por el proyecto, es deuda de lectura.
+// Por qué importa: el código se lee 10 veces más de lo que se escribe.
+//
+// PISO: no juzga TODO nombre malo (eso es criterio) — sólo los mecánicos que el doc
+// nombra. Afina DENYLIST a tu gusto; marca una excepción legítima con // candado:ok.
+// ===========================================================================
+
+describe.skip("candado: nombres que dicen lo que hacen", () => {
+  it("no hay identificadores mudos ni con sufijo numérico perezoso", () => {
+    const mudo = /\b(?:const|let|var|function)\s+(?:data|tmp|temp|foo|bar|baz|val|thing|obj|arr|res|ret)\b/;
+    const sufijoNum = /\b(?:handle\w+|on\w+)\d\b/;
+    const permitido = (l: string) => /candado:ok/i.test(l);
+
+    const infractores = escanearFuente(
+      new RegExp(`${mudo.source}|${sufijoNum.source}`),
+      (l) => !permitido(l),
+    );
+
+    expect(
+      infractores,
+      `\nNombres que no dicen lo que hacen:\n  - ${infractores.join("\n  - ")}\n` +
+        `Renómbralos a algo que revele su intención (o // candado:ok si es legítimo).\n`,
+    ).toEqual([]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // RECORDATORIO DEL MÉTODO
 // Estos cuatro son el PUNTO DE PARTIDA, no la meta. El arnés que de verdad protege
