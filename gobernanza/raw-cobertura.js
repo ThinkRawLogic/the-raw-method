@@ -128,7 +128,7 @@ function problemasDeHonestidad(texto) {
     const m = t.match(s.re);
     if (!m) { out.push(`falta la sección honesta "${s.nombre}" (Fortalezas / Debilidades / Qué NO se probó son obligatorias al cerrar)`); continue; }
     const rest = t.slice(m.index + m[0].length);
-    const corte = rest.search(/\n\s*#{1,6}\s/); // hasta el próximo encabezado o EOF
+    const corte = rest.search(/\n\s*(?:#{1,6}\s|---|\*\*(?:Construy|Audit|Fecha de cierre|Rastro))/i); // corta en encabezado, --- o CAMPO conocido (no cualquier **negrita**, que puede ser contenido real)
     const cuerpo = (corte === -1 ? rest : rest.slice(0, corte)).replace(/[^\p{L}\p{N}]/gu, '');
     if (cuerpo.length < MIN_CUERPO_HONESTO) out.push(`la sección honesta "${s.nombre}" está vacía o es de relleno (reemplazá el "___" con algo real)`);
   }
@@ -147,7 +147,7 @@ function problemasDeRevision(texto) {
   const m = t.match(SECCION_REVISION.re);
   if (!m) { out.push('falta la sección "Qué revisar — para el dueño" (obligatoria al cerrar una ficha v3: la lista corta de lo que el dueño verifica antes de dar el OK)'); return out; }
   const rest = t.slice(m.index + m[0].length);
-  const corte = rest.search(/\n\s*#{1,6}\s/); // hasta el próximo encabezado o EOF
+  const corte = rest.search(/\n\s*(?:#{1,6}\s|---|\*\*(?:Construy|Audit|Fecha de cierre|Rastro))/i); // corta en encabezado, --- o CAMPO conocido (no cualquier **negrita**, que puede ser contenido real)
   const cuerpo = (corte === -1 ? rest : rest.slice(0, corte)).replace(/[^\p{L}\p{N}]/gu, '');
   if (cuerpo.length < MIN_CUERPO_HONESTO) out.push('la sección "Qué revisar — para el dueño" está vacía o es de relleno (escribí la lista real de qué revisa el dueño antes del OK)');
   return out;
@@ -223,10 +223,10 @@ function leerFichas(dir) {
  * Revisa la cobertura + honestidad + auditoría. Devuelve { esMetodo, fichas, cerradas, problemas }.
  * Cobertura se exige a toda ficha cerrada; honestidad y auditoría, solo a las fichas v2.
  */
-function revisarCobertura(dir) {
+function revisarCobertura(dir, leerFichasFn) {
   const root = metodoRoot(dir);
   if (!root) return { esMetodo: false, fichas: [], cerradas: [], problemas: [] };
-  const fichas = leerFichas(root);
+  const fichas = (leerFichasFn || leerFichas)(root); // inyectable: el gate le pasa un lector del ÍNDICE de git
   const cerradas = fichas.filter((f) => f.cerrada);
   const problemas = [];
   for (const f of cerradas) {

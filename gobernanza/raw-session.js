@@ -63,11 +63,27 @@ function main() {
   if (process.env.CLAUDE_PROJECT_DIR) dir = process.env.CLAUDE_PROJECT_DIR;
 
   if (!isMethodProject(dir)) return; // silencio fuera de un proyecto Raw Method
+
+  // Auto-actualización: ¿el método avanzó y este proyecto quedó atrás? Se lo inyectamos a la IA
+  // (y lo marcamos en el banner del humano) para que adopte lo aditivo y traiga lo manual al dueño.
+  let contexto = REFLEJO, avisoAdopcion = '';
+  try {
+    const { revisar } = require('./raw-adopcion');
+    const { version, pendientes } = revisar(dir);
+    if (pendientes.length) {
+      avisoAdopcion = ` · ⚠ ${pendientes.length} mejora(s) del método sin adoptar`;
+      const script = (__dirname + '/raw-adopcion.js').replace(/\\/g, '/');
+      contexto += `\n⚠ EL MÉTODO AVANZÓ (v${version}); este proyecto tiene ${pendientes.length} mejora(s) SIN ADOPTAR:\n` +
+        pendientes.map((p) => `  · [${p.auto ? 'auto' : 'OK del dueño'}] ${p.titulo}`).join('\n') +
+        `\nAL ARRANCAR: corré \`node "${script}" --aplicar "${dir}"\` (aplica lo auto), traé lo "OK del dueño" al dueño, y avisale QUÉ se adoptó.\n`;
+    }
+  } catch (_) {}
+
   // JSON: `systemMessage` = banner VISIBLE para el humano; `additionalContext` = el reflejo
   // que lee la IA. (stdout crudo solo iría al contexto de la IA, invisible para el usuario.)
   const out = {
-    systemMessage: '━━━ THE RAW METHOD — ACTIVO EN ESTE PROYECTO ━━━  ·  Raw Logic | A thinking venture',
-    hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: REFLEJO },
+    systemMessage: '━━━ THE RAW METHOD — ACTIVO EN ESTE PROYECTO ━━━  ·  Raw Logic | A thinking venture' + avisoAdopcion,
+    hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: contexto },
   };
   try { process.stdout.write(JSON.stringify(out)); } catch (_) {}
 }

@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SKIP = new Set(['.git', 'node_modules', 'dist', 'build', '.next', 'nuxt', 'vendor', 'coverage', 'target']);
-const EXT = /\.(js|mjs|cjs|ts|tsx|jsx|py|go|rb|php|sql|sh|prg|md|yml|yaml)$/i;
+const EXT = /\.(js|mjs|cjs|ts|tsx|jsx|py|go|rb|php|sql|sh|bash|prg|md|mdx|yml|yaml|toml|tf|rs|java|kt|kts|swift|cs|cpp|cc|c|h|hpp|vue|svelte|dart|scala|ex|exs|clj|lua|r|jl|pl|pm|ps1)$/i;
 // Exige un prefijo de comentario, para no matchear el marcador dentro de un string o regex.
 const RE = /(?:\/\/|#|--|;|\*|<!--)\s*raw-deuda:\s*(.+?)\s*$/i;
 
@@ -24,7 +24,7 @@ function walk(dir, out) {
   try { es = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
   for (const e of es) {
     if (e.isDirectory()) { if (SKIP.has(e.name)) continue; walk(path.join(dir, e.name), out); } // NO saltear dot-dirs: .github/ se commitea
-    else if (e.isFile() && EXT.test(e.name) && e.name !== 'raw-deuda.js') out.push(path.join(dir, e.name)); // el propio harvester nombra el marcador en su doc
+    else if (e.isFile() && (EXT.test(e.name) || /^(?:Dockerfile|Makefile|Justfile|Rakefile)$/i.test(e.name)) && e.name !== 'raw-deuda.js') out.push(path.join(dir, e.name)); // + archivos sin extensión conocidos
   }
 }
 
@@ -39,9 +39,10 @@ function cosechar(dir) {
     t.split('\n').forEach((l, i) => {
       const m = l.match(RE);
       if (!m) return;
-      const md = m[1].match(/antes:\s*(\d{4})-(\d{1,2})-(\d{1,2})/i); // fecha tope opcional (tolera no zero-padded: 2020-1-1)
+      const md = m[1].match(/antes:\s*(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/i); // fecha tope ISO: - / . como separador
       const venceEl = md ? `${md[1]}-${md[2].padStart(2, '0')}-${md[3].padStart(2, '0')}` : null;
-      items.push({ file: path.relative(root, f), line: i + 1, nota: m[1], venceEl });
+      const fechaMala = /antes:/i.test(m[1]) && !venceEl; // hay "antes:" pero no es ISO parseable → NO ignorar en silencio
+      items.push({ file: path.relative(root, f), line: i + 1, nota: m[1], venceEl, fechaMala });
     });
   }
   return items;
@@ -62,10 +63,17 @@ if (require.main === module) {
   console.log(`📋 raw-deuda — ${items.length} deuda(s) declarada(s) en el código:`);
   for (const x of items) console.log(`  · ${x.file}:${x.line} — ${x.nota}${x.venceEl ? '  (antes: ' + x.venceEl + ')' : ''}`);
   const vlist = vencidas(items);
-  if (vlist.length) {
-    console.error(`\n⛔ ${vlist.length} deuda(s) VENCIDA(S) — pasó su "antes:" y siguen abiertas:`);
-    for (const x of vlist) console.error(`  · ${x.file}:${x.line} — vencía ${x.venceEl} — ${x.nota}`);
-    console.error('Una deuda diferida con fecha pasada NO se ignora: cablear el candado o escalar al dueño (FONDO). (C38)');
+  const malas = items.filter((x) => x.fechaMala);
+  if (vlist.length || malas.length) {
+    if (vlist.length) {
+      console.error(`\n⛔ ${vlist.length} deuda(s) VENCIDA(S) — pasó su "antes:" y siguen abiertas:`);
+      for (const x of vlist) console.error(`  · ${x.file}:${x.line} — vencía ${x.venceEl} — ${x.nota}`);
+    }
+    if (malas.length) {
+      console.error(`\n⛔ ${malas.length} deuda(s) con "antes:" en formato NO reconocido (usá YYYY-MM-DD; así no se ignora un plazo en silencio):`);
+      for (const x of malas) console.error(`  · ${x.file}:${x.line} — ${x.nota}`);
+    }
+    console.error('\nUna deuda con fecha vencida o ilegible NO se ignora: cablear el candado o escalar al dueño (FONDO). (C38)');
     process.exit(1);
   }
   console.log('\nCada una es un candado/atajo diferido. Llevalas a PENDIENTES.md con dueño y fecha tope.');

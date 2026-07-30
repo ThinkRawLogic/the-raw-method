@@ -30,6 +30,7 @@ El hook solo ve los commits que hace la IA vía Claude Code. El Nivel 2 cubre el
 | Pieza | Qué hace |
 |---|---|
 | `raw-check.js` | El **mismo** chequeo de cobertura, como **comando**: `node gobernanza/raw-check.js [dir]`. exit 1 si una ficha cerrada quedó sin resolver. Lo corre el CI y lo podés correr vos a mano. |
+| `raw-links.js` | **Frescura documental**: `node gobernanza/raw-links.js [dir]`. Cobra la promesa que el método ya se hizo (*"un documento que dice algo que ya no es cierto es un bug"*, `referencias/documentos-vivos.md`) para las dos mentiras COMPROBABLES: **(1)** un doc que declara `§1–§N` sobre la ley cuando el máximo real es otro — el caso que se comió **17 reglas invisibles** en un proyecto real y recurrió en dos; **(2)** enlaces markdown relativos a archivos que se movieron. **Sólo avisa** (no bloquea) sobre prosa CONGELADA: `_archivo/`, `plantillas/`, `<details>` históricos y, para el rango, cualquier doc que no sea puntero vivo — una bitácora fechada dice §1–§69 porque *era cierto entonces*. No verifica "¿este párrafo dice la verdad?": eso es juicio, y disfrazar juicio de candado es lo que el método prohíbe. |
 | `.github/workflows/raw-method.yml` | El candado a nivel **servidor**. Corre `raw-check` en cada **push y PR**, así cubre el **commit humano**, la **edición por la web de GitHub** y el **`git commit --no-verify`** (imposibles de frenar en local — el CI corre después, sobre lo ya guardado). |
 
 **Para que el CI sea un candado de verdad** (no solo un aviso), activá *branch protection* en

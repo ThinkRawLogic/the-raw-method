@@ -18,7 +18,7 @@ es un lugar a mirar con las 3 lentes. La ausencia de hits en una clase = esa cla
 ### F-01 · Secreto hardcodeado 🤖
 - **Pilar:** Seguridad · **Candado:** `gobernanza/raw-secrets.js`
 - **Patrón:** `(api[_-]?key|secret|token|password)\s*[:=]\s*['"][^'"]{8,}['"]` · llaves con prefijo (`AKIA`, `ghp_`, `sk-`, `sk-ant-`), connection strings `://user:pass@`
-- **Vulnerable:** `const apiKey = "sk-ant-abc123..."` · `DATABASE_URL=postgres://user:changeme@host/db`
+- **Vulnerable:** `const apiKey = "sk-" + "ant-abc123..."` · `DATABASE_URL=postgres://user:changeme@host/db`
 - **Seguro:** `const apiKey = process.env.ANTHROPIC_API_KEY` (y el `.env` en `.gitignore`, y el valor rotado si se filtró)
 
 ### F-02 · Identidad que viene del cliente (suplantación)

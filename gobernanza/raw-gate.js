@@ -22,8 +22,30 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { spawnSync } = require('child_process');
 const { revisarCobertura } = require('./raw-cobertura');
+
+// El repo EFECTIVO del comando: si hay `git -C <dir>` o un `cd <dir> &&` al inicio, ese es el
+// directorio donde opera el git — no el cwd de la sesión. Cierra el bug de escanear el repo
+// equivocado al commitear en otro repo desde la sesión de un proyecto.
+function dirEfectivo(command, fallback) {
+  const expandir = (raw) => {
+    let x = raw.replace(/^['"]|['"]$/g, '');
+    if (x === '~' || x.startsWith('~/') || x.startsWith('~\\')) x = path.join(os.homedir(), x.slice(1));
+    return path.isAbsolute(x) ? x : path.resolve(fallback, x);
+  };
+  // git --work-tree=<dir> apunta git a otro árbol → ese es el repo efectivo.
+  let m = command.match(/--work-tree[= ]("[^"]+"|'[^']+'|\S+)/i);
+  if (m) { try { const d = expandir(m[1]); if (fs.existsSync(d)) return d; } catch (_) {} }
+  // Exigimos que el `-C <dir>` sea del propio commit (no de un `git -C decoy rev-parse` señuelo antes del commit real).
+  m = command.match(/\bgit\s+(?:-c\s+\S+\s+|--no-pager\s+)*-C\s+("[^"]+"|'[^']+'|\S+)(?:\s+(?:-c\s+\S+|--no-pager|--?[\w-]+(?:=\S+)?))*\s+(?:commit|merge|revert|cherry-pick|am)\b/i);
+  if (m) { try { const d = expandir(m[1]); if (fs.existsSync(d)) return d; } catch (_) {} }
+  // Todos los `cd` (al inicio o tras && ; |), tomando el ÚLTIMO que resuelva a un dir existente.
+  const cds = [...command.matchAll(/(?:^|&&|;|\|)\s*cd\s+("[^"]+"|'[^']+'|[^\s&;|]+)/gi)];
+  for (let k = cds.length - 1; k >= 0; k--) { try { const d = expandir(cds[k][1]); if (fs.existsSync(d)) return d; } catch (_) {} }
+  return fallback;
+}
 
 // Helpers de git para el router (C3): leen el diff staged. Best-effort, falla-abierto
 // (sin git, o fuera de un repo, devuelven vacío → el router no hace nada).
@@ -35,13 +57,30 @@ function gitLines(dir, args) { return gitOut(dir, args).split('\n').map((s) => s
 // `.raw-fondo-allow`, o (b) OK explícito del dueño: `RAW_FONDO_OK=1` antepuesto al comando.
 // Dormido por defecto → no cambia el entorno de nadie hasta que se cree `.raw-fondo-on`.
 function c4Habilitado(dir) { try { return fs.existsSync(path.join(dir, '.raw-fondo-on')); } catch (_) { return false; } }
-const IRREVERSIBLE = /\b(?:vercel\s+(?:deploy|--prod|prod)|netlify\s+deploy|(?:npm|pnpm|yarn)\s+publish|gh\s+release\s+create|rm\s+-[a-z]*f|rm\s+[^|;&\n]*--force|Remove-Item\b[^|;&\n]*-(?:Recurse|Force)|git\s+push\b[^|;&\n]*(?:--force|--force-with-lease|-f\b)|git\s+reset\s+--hard|git\s+clean\s+-[a-z]*f|drop\s+(?:table|database|schema)|truncate\s+table|prisma\s+migrate\s+reset|prisma\s+db\s+push\b[^|;&\n]*--accept-data-loss)/i;
+// Lista NEGRA de operaciones irreversibles. Honesto: una lista negra nunca está "completa"
+// (por eso C4 es una red, no un sello); se amplía cuando aparece una herramienta nueva.
+const IRREVERSIBLE = /\b(?:vercel\s+(?:deploy|--prod|prod)|netlify\s+deploy|(?:fly|flyctl)\s+deploy|wrangler\s+(?:deploy|publish)|firebase\s+deploy|gcloud\s+(?:\S+\s+){1,3}delete|helm\s+(?:delete|uninstall)|kubectl\s+delete|(?:npm|pnpm|yarn)\s+publish|gh\s+release\s+create|aws\s+s3\s+(?:(?:rm|sync)\b[^|;&\n]*--(?:delete|recursive)|rb\b)|rm\s+(?:-\S+\s+)*-[a-z]*f|rm\s+[^|;&\n]*--force|find\s+[^|;&\n]*-delete\b|Remove-Item\b[^|;&\n]*-(?:Recurse|Force)|git\s+push\b[^|;&\n]*(?:--force|--force-with-lease|\s-f\b|\s\+\w)|git\s+reset\s+--hard|git\s+clean\s+-[a-z]*f|git\s+branch\s+[^|;&\n]*-[a-zA-Z]*D|drop\s+(?:table|database|schema)|truncate\s+table|dropdb\b|prisma\s+migrate\s+reset|prisma\s+db\s+push\b[^|;&\n]*--accept-data-loss|supabase\s+db\s+reset)/i;
 function esConfianzaFondo(command, dir) {
   try {
     const p = path.join(dir, '.raw-fondo-allow');
     if (!fs.existsSync(p)) return false;
     return fs.readFileSync(p, 'utf8').split('\n').map((s) => s.trim()).filter((s) => s && !s.startsWith('#')).some((pat) => command.includes(pat));
   } catch (_) { return false; }
+}
+
+// Lee las fichas del ÍNDICE de git (contenido staged), para evaluar lo que REALMENTE se commitea
+// — no el worktree, que se puede desincronizar para saltear los chequeos (C13/audit).
+function leerFichasDelIndex(root) {
+  const { parseFicha, esFicha } = require('./raw-cobertura');
+  const out = [];
+  for (const sf of gitLines(root, ['diff', '--cached', '--name-only'])) {
+    if (!/(^|\/)(docs\/_cobertura|_cobertura)\/[^/]+\.md$/i.test(sf.replace(/\\/g, '/'))) continue;
+    const texto = gitOut(root, ['show', ':' + sf]);
+    if (!texto) continue;
+    const ficha = parseFicha(texto, path.basename(sf));
+    if (esFicha(ficha)) out.push(ficha);
+  }
+  return out;
 }
 
 function allow() { process.exit(0); }
@@ -66,13 +105,14 @@ function main() {
   try { data = JSON.parse(readStdin() || '{}'); } catch (_) { data = {}; }
 
   const command = (data.tool_input && data.tool_input.command) || '';
-  const dir = data.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const cwd = data.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const dir = dirEfectivo(command, cwd); // el repo donde REALMENTE corre el git (cd / git -C), no solo el cwd
 
   // C4 — FRENO DE MANO (opt-in). Corre para CUALQUIER comando, antes que nada.
   // Quitamos strings entre comillas antes de matchear: así el `-m "..."` de un commit ni una
   // palabra peligrosa citada en un mensaje disparan un falso positivo (que empujaría al bypass).
-  const cmdSinComillas = command.replace(/"[^"]*"|'[^']*'/g, '');
-  if (c4Habilitado(dir) && IRREVERSIBLE.test(cmdSinComillas) && !/\bRAW_FONDO_OK=1\b/.test(command) && !esConfianzaFondo(command, dir)) {
+  const cmdSinComillas = command.replace(/(?:^|\s)-[a-z]*m\s+(?:"[^"]*"|'[^']*')/g, ' '); // el mensaje de -m/-am/-cm, no TODO string citado (un irreversible entre comillas NO debe evadir)
+  if (c4Habilitado(dir) && IRREVERSIBLE.test(cmdSinComillas) && !/--dry-run\b/i.test(command) && !/\bRAW_FONDO_OK=1\b/.test(command) && !esConfianzaFondo(command, dir)) {
     process.stderr.write(
       '\n⛔ THE RAW METHOD — FRENO DE MANO (C4): operación IRREVERSIBLE (FONDO).\n\n' +
       '  · ' + command.slice(0, 200) + '\n\n' +
@@ -114,17 +154,31 @@ function main() {
     return block('Cobertura incompleta en bloque(s) cerrado(s):\n' + problemas.map((p) => '  · ' + p).join('\n'));
   }
 
-  // ¿Este commit CIERRA un bloque? Robusto al wording del mensaje: lo declara el mensaje
-  // ([cierre]/cerrar bloque/close block), O hay una ficha CERRADA entre los archivos staged
-  // (el diff del cierre trae su propia ficha). Así funciona aunque el mensaje sea "B15 — ...".
-  const declaraCierre = /\[cierre\]|cerrar\s+bloque|close\s+block/i.test(command);
-  const staged = gitLines(dir, ['diff', '--cached', '--name-only']);
-  const norm = (s) => s.replace(/\\/g, '/');
-  const fichasStaged = cerradas.filter((f) => staged.some((sf) => norm(sf).endsWith(f.archivo)));
-  const cerrando = declaraCierre || fichasStaged.length > 0;
+  // Regla 1b + base del router/C13: evaluar la versión del ÍNDICE de las fichas staged (lo que se
+  // commitea de verdad). Una ficha cerrada en el índice no se puede "abrir" en el worktree para saltear.
+  let idxCerradas = [];
+  try {
+    const idx = revisarCobertura(dir, leerFichasDelIndex);
+    if (idx.problemas.length) {
+      return block('Cobertura incompleta en la versión STAGED (índice) de un bloque cerrado:\n' + idx.problemas.map((p) => '  · ' + p).join('\n'));
+    }
+    idxCerradas = idx.cerradas || [];
+  } catch (_) { /* sin git: falla-abierto */ }
 
-  // Regla 2: declara cierre pero NO hay ninguna ficha cerrada.
-  if (declaraCierre && cerradas.length === 0) {
+  // ¿Este commit CIERRA un bloque? Por el mensaje ([cierre]/cerrar bloque/close block), O porque hay
+  // una ficha CERRADA en el ÍNDICE (el diff del cierre trae su propia ficha). Robusto al wording.
+  const declaraCierre = /\[cierre\]|cerrar\s+bloque|close\s+block/i.test(command);
+  // `git commit -a/-am` auto-stagea al EJECUTARSE; cuando corre el hook (antes de git) los cambios
+  // NO están en el índice → miramos el worktree (diff HEAD) para no quedar ciegos.
+  const conA = /\bgit\s+commit\b[^|;&\n]*\s-[a-z]*a/i.test(command);
+  const diffArgs = conA ? ['diff', 'HEAD'] : ['diff', '--cached'];
+  const staged = gitLines(dir, [...diffArgs, '--name-only']);
+  const cerrando = declaraCierre || idxCerradas.length > 0 || (conA && cerradas.length > 0);
+  // Para router/C13: con -a, el worktree; si no, lo del índice (o worktree si no hay ficha staged).
+  const cerradasEfectivas = conA ? cerradas : (idxCerradas.length ? idxCerradas : cerradas);
+
+  // Regla 2: declara cierre pero NO hay ninguna ficha cerrada (ni en worktree ni en índice).
+  if (declaraCierre && cerradas.length === 0 && idxCerradas.length === 0) {
     return block(
       'El commit declara un CIERRE de bloque pero no hay ninguna ficha de cobertura cerrada.\n' +
       '  · Copiá plantillas/ficha-cobertura.md, resolvé sus 15 claves y llená "Fecha de cierre".'
@@ -133,23 +187,26 @@ function main() {
 
   // Regla 3 (C3 — ROUTER core): al cerrar, el diff no puede tocar un pilar de alta confianza
   // (dinero/migración/deps/salientes) y que la ficha lo marque N/A. Cierra el "falso N/A".
-  // Chequea SOLO las fichas que se cierran en este commit (fallback: todas, si el cierre vino por
-  // mensaje sin ficha staged) — así una N/A vieja y correcta no choca con un diff nuevo.
-  if (cerrando && cerradas.length > 0) {
+  if (cerrando && cerradasEfectivas.length > 0) {
     try {
       const { clavesRequeridas, problemasDeRouter } = require('./raw-router');
-      const req = clavesRequeridas(staged, gitOut(dir, ['diff', '--cached']));
+      const req = clavesRequeridas(staged, gitOut(dir, diffArgs));
       if (req.size) {
-        const fichas = fichasStaged.length ? fichasStaged : cerradas;
         const probs = [];
-        for (const f of fichas) for (const p of problemasDeRouter(f, req)) probs.push(`${f.archivo}: ${p}`);
+        for (const f of cerradasEfectivas) for (const p of problemasDeRouter(f, req)) probs.push(`${f.archivo}: ${p}`);
         if (probs.length) return block('El router detectó un pilar TOCADO por el diff pero marcado N/A (falso N/A):\n' + probs.map((p) => '  · ' + p).join('\n'));
       }
     } catch (_) { /* sin git o error interno: falla-abierto, no brickeamos el commit */ }
   }
 
-  // Regla 4 (C13 — DOCS EN EL MISMO COMMIT): un cierre exige tocar bitácora/pendientes.
-  if (cerrando && staged.length && !staged.some((f) => /(^|\/)(bit[aá]cora|pendientes|backlog|changelog)[^/]*\.(md|txt|mdx)$/i.test(f))) {
+  // Regla 4 (C13 — DOCS EN EL MISMO COMMIT): un cierre exige tocar bitácora/pendientes CON contenido
+  // (no un archivo señuelo vacío con el nombre correcto).
+  const tocaDocReal = staged.some((f) => {
+    if (!/(^|\/)(bit[aá]cora|pendientes|backlog|changelog)[^/]*\.(md|txt|mdx)$/i.test(f)) return false;
+    const ns = gitOut(dir, [...diffArgs, '--numstat', '--', f]).trim().split(/\s+/);
+    return parseInt(ns[0], 10) > 0; // líneas AÑADIDAS > 0
+  });
+  if (cerrando && staged.length && !tocaDocReal) {
     return block(
       'Registrás un CIERRE pero el commit no toca la bitácora ni los pendientes.\n' +
       '  · Actualizá BITACORA.md y PENDIENTES.md en el MISMO commit — un doc que miente sobre el estado es un bug.'

@@ -22,11 +22,11 @@ const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.next', 'co
 const EXT = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py']);
 // Marcadores de "test/candado apagado". Específicos, para bajo falso-positivo.
 const PATRONES = [
-  /\b(?:it|describe|test|context)\.(?:skip|only|skipIf)\b/, // .skip/.only/.skipIf (incluye .only.each)
-  /\bf(?:it|describe|test|context)\s*\(/,                   // fit/fdescribe/fcontext (focus: enfoca uno y APAGA el resto)
-  /\bx(?:it|describe|test)\s*\(/,                           // xit/xdescribe/xtest
-  /@pytest\.mark\.skip/i,                                   // skip Y skipif (sin \b, que rompía en 'skipif')
-  /\btest\.todo\s*\(/,
+  /\b(?:it|describe|test|context)\s*(?:\.\s*\w+\s*)*\.\s*(?:skip|only|skipIf|todo|fixme|failing)\b/, // + failing; tolera espacios alrededor del punto y cadenas intermedias
+  /\bf(?:it|describe|context)\s*\(\s*[`'"]/,                                                         // fit/fdescribe/fcontext con string
+  /\bx(?:it|describe|test)\s*\(/,                                                                    // xit/xdescribe/xtest
+  /@(?:pytest\.mark\.(?:skip|xfail)|unittest\.skip)/i,                                               // pytest.mark.skip/skipif/xfail + unittest.skip/skipIf/skipUnless
+  /\bpending\s*\(/,                                                                                  // pending() (Jasmine)
 ];
 const JUSTIF = /raw-(?:ok|silenciado)\s*:/i;
 

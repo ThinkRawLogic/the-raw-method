@@ -16,7 +16,7 @@
 
 // señal → claves de la ficha que NO pueden quedar N/A cuando la señal aparece en el diff.
 const REGLAS = [
-  { nombre: 'dinero',          archivos: /(_cents|precio|saldo|cobro|tesoreria|montos?)|(?:^|\/)(pagos|pedidos|devoluciones|carrito)(?:\/|s?\.)/i, contenido: /_cents\b/i,                                     claves: ['concurrencia', 'rastro'] },
+  { nombre: 'dinero',          archivos: /(_cents|precio|saldo|cobro|tesoreria|montos?|importe|iva|descuento|impuesto|factura|abono|credito|tarifa|reembolso|comisi[oó]n|deposito|retiro|transferencia|moneda|divisa)|(?:^|\/)(pagos|pedidos|devoluciones|carrito|facturaci[oó]n)(?:\/|s?\.)/i, contenido: /_cents\b|\bimporte\b|\biva\b|\breembolso\b/i, claves: ['concurrencia', 'rastro'] },
   { nombre: 'migración',       archivos: /(prisma\/migrations\/|\/migrations\/|\.sql$|schema\.prisma$)/i,                                          contenido: /(create|alter|drop)\s+table|addColumn|createTable/i, claves: ['dato', 'rastro'] },
   { nombre: 'dependencia',     archivos: /(^|\/)package\.json$/i,                                                                                  contenido: null,                                            claves: ['stack'] },
   { nombre: 'llamada externa', archivos: null,                                                                                                    contenido: /\bfetch\s*\(|\baxios\b|http\.request\s*\(/i,     claves: ['errores'] },
@@ -35,8 +35,10 @@ function clavesRequeridas(files, contenido) {
 
 // Caza "N/A" y sus formas naturales EN ESPAÑOL (el proyecto es 100% español): "No aplica",
 // "No corresponde", "N.A.". El \b tras "aplica" evita cazar "no aplicamos redondeo..." (nota real).
+// Anclado al INICIO de la nota: una N/A empieza con el token ("N/A — ...", "No aplica ..."). Así una
+// nota REAL que menciona "no aplica" a mitad de frase NO se confunde con un N/A. Caza N/A y N/C.
 function esNA(nota) {
-  return /\bn\s*\.?\s*\/?\s*\.?\s*a\b|\bno\s+aplica(?:ble)?\b|\bno\s+corresponde\b|\bnot\s+applicable\b/i.test(nota || '');
+  return /^\s*(?:n\s*[.\/]?\s*[ac]\b|no\s+(?:aplica(?:ble)?|corresponde|procede|(?:es\s+)?(?:relevante|pertinente)|viene\s+al\s+caso|afecta|impacta|involucra)\b|nada\s+relevante\b|irrelevante\b|not\s+applicable\b)/i.test((nota || '').trim());
 }
 
 function problemasDeRouter(ficha, requeridas) {

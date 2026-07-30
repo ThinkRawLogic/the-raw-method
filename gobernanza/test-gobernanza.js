@@ -99,6 +99,7 @@ const con = (sufijo, ficha) => { const d = tmpProyecto(sufijo); marcarMetodo(d);
 function gitInit(dir) { spawnSync('git', ['init', '-q'], { cwd: dir }); }
 function gitStage(dir, file, content) { const p = path.join(dir, file); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, content); spawnSync('git', ['add', file], { cwd: dir }); }
 function fichaConNA(claveNA) { const l = CLAVES.map((c) => c === claveNA ? `- [x] **(${c})** N/A — no aplica.` : `- [x] **(${c})** algo. → hecho tal cosa`); return base(true, l) + HONESTO; }
+function gitCommit(dir, msg) { spawnSync('git', ['-c', 'user.email=a@b.c', '-c', 'user.name=t', 'commit', '-m', msg], { cwd: dir }); }
 
 // ============================ Nivel 1 — raw-gate (hook) ======================
 { const d = con('muda', fichaConClaveMuda(true)); const r = correrGate('git commit -m "x"', d);
@@ -296,6 +297,149 @@ function correr(script, dir) { const r = spawnSync('node', [script, dir], { enco
 // C13 — señuelo de nombre:
 { const d = con('c13-decoy', fichaResuelta(true)); gitInit(d); gitStage(d, 'src/changelog.ts', 'export const x = 1;\n');
   check('C13 regr: señuelo src/changelog.ts (no .md) → BLOQUEADO (no engaña)', correrGate('git commit -m "[cierre] b"', d).code === 2); }
+
+// ============== FIXES DE LAS DEBILIDADES (lo que tenía solución, cerrado) ============
+// gate-cwd: escanear el repo REAL del comando (git -C / cd), no el cwd de la sesión:
+{ const target = con('cwd-target', fichaConClaveMuda(true)); const otro = tmpProyecto('cwd-otro');
+  check('gate-cwd: git -C <repo con clave muda> desde otro cwd → BLOQUEADO (escanea el repo real)',
+    correrGate('git -C "' + target + '" commit -m x', otro).code === 2); }
+// C4 — más herramientas de deploy/borrado:
+{ const d = con('c4-tools'); fs.writeFileSync(path.join(d, '.raw-fondo-on'), '');
+  check('C4 regr: fly deploy → BLOQUEA', correrGate('fly deploy', d).code === 2);
+  check('C4 regr: wrangler deploy → BLOQUEA', correrGate('wrangler deploy', d).code === 2);
+  check('C4 regr: kubectl delete → BLOQUEA', correrGate('kubectl delete pod x', d).code === 2);
+  check('C4 regr: aws s3 rm --recursive → BLOQUEA', correrGate('aws s3 rm s3://b --recursive', d).code === 2); }
+// C13/desync: ficha CERRADA en el índice, ABIERTA en el worktree → se evalúa el índice:
+{ const d = con('c13-desync'); gitInit(d);
+  ponerFicha(d, 'b.md', fichaConClaveMuda(true)); spawnSync('git', ['add', 'docs/_cobertura/b.md'], { cwd: d }); // stage CERRADA (clave muda)
+  ponerFicha(d, 'b.md', fichaConClaveMuda(false)); // worktree ahora ABIERTA (fecha en blanco)
+  check('C13/desync: cerrada en índice + abierta en worktree → BLOQUEADO (se lee el índice)', correrGate('git commit -m x', d).code === 2); }
+// C3-CI: raw-check corre el router sobre el último commit (backstop fuera del hook):
+{ const d = con('cicheck'); gitInit(d);
+  fs.writeFileSync(path.join(d, 'a.txt'), '1\n'); spawnSync('git', ['add', '-A'], { cwd: d }); gitCommit(d, 'base');
+  ponerFicha(d, 'b.md', fichaConNA('concurrencia'));
+  fs.writeFileSync(path.join(d, 'pago_cents.js'), 'const amount_cents = 1;\n'); spawnSync('git', ['add', '-A'], { cwd: d }); gitCommit(d, 'cierre b: dinero + ficha');
+  check('C3-CI: raw-check corre el router sobre el commit de cierre (dinero + N/A) → FALLA (exit 1)', correrCheck(d).code === 1); }
+
+// AUTO-ACTUALIZACIÓN del método en los proyectos (versión + adopción automática):
+{ const { revisar, adoptar } = require('./raw-adopcion');
+  const mk = (suf) => { const d = tmpProyecto(suf); fs.mkdirSync(path.join(d, 'docs', '_cobertura'), { recursive: true }); fs.writeFileSync(path.join(d, 'docs', '_cobertura', '_PLANTILLA.md'), '# Ficha\n\n- [ ] (dinero) algo\n'); return d; };
+  const d1 = mk('adopt-need');
+  check('adopción: plantilla sin "Qué revisar" → detecta pendiente', revisar(d1).pendientes.some((p) => p.id === 'ficha-que-revisar'));
+  const d2 = mk('adopt-apply'); adoptar(d2);
+  check('adopción: --aplicar agrega la sección sola y queda al día', revisar(d2).pendientes.length === 0 && /Qué revisar/.test(fs.readFileSync(path.join(d2, 'docs', '_cobertura', '_PLANTILLA.md'), 'utf8')));
+  check('adopción: registra la versión adoptada (.raw-method-version)', fs.existsSync(path.join(d2, '.raw-method-version')));
+  const d3 = tmpProyecto('adopt-none');
+  check('adopción: proyecto que no usa fichas → sin pendientes (no molesta)', revisar(d3).pendientes.length === 0); }
+
+// ===== REGRESIONES RONDA 2 (lo que la re-auditoría rompió, ahora cerrado) =====
+{ const d = tmpProyecto('sec-ex-comment'); fs.writeFileSync(path.join(d, 'f.js'), 'const DB = "postgres://admin:' + 'R3alPr0dP4ss@prod-db.company.io:5432/main"; // example usage\n');
+  check('C10 r2: secreto real + comentario "example" → BLOQUEA (allowlist mira el match, no la línea)', correr(SECRETS, d).code === 1); }
+{ const d = tmpProyecto('sec-decoy'); fs.writeFileSync(path.join(d, 'f.js'), 'password = "postgres"; const apiSecret = "' + 'aB3xR3alPr0dS3cr3tV4lue99";\n');
+  check('C10 r2: default-débil decoy NO tapa el secreto de al lado → BLOQUEA', correr(SECRETS, d).code === 1); }
+{ const d = tmpProyecto('sec-template'); fs.writeFileSync(path.join(d, 'creds.template.json'), '{"type":"service' + '_account","private_key":"REDACTED"}\n');
+  check('C10 r2: .template con creds REDACTED → NO bloquea', correr(SECRETS, d).code === 0); }
+{ const d = tmpProyecto('sil-chain'); fs.writeFileSync(path.join(d, 'a.test.js'), 'it.concurrent.skip("x", () => {});\n');
+  check('C39 r2: it.concurrent.skip → BLOQUEA', correr(SILENCIADO, d).code === 1); }
+{ const d = tmpProyecto('sil-todo'); fs.writeFileSync(path.join(d, 'a.test.js'), 'describe.todo("x");\n');
+  check('C39 r2: describe.todo → BLOQUEA', correr(SILENCIADO, d).code === 1); }
+{ const d = tmpProyecto('deps-ws'); fs.writeFileSync(path.join(d, 'package.json'), '{}'); fs.writeFileSync(path.join(d, 'package-lock.json'), '   \n  \n');
+  check('C43 r2: lockfile de solo-espacios → BLOQUEA', correr(DEPS, d).code === 1); }
+{ const d = tmpProyecto('deuda-slash'); fs.writeFileSync(path.join(d, 'x.js'), '// raw-deuda: X antes: 2020/01/01\n');
+  check('C38 r2: fecha vencida con barras (2020/01/01) → BLOQUEA', correr(DEUDA, d).code === 1); }
+{ const { esNA } = require('./raw-router');
+  check('C3 r2: esNA("No procede") → true', esNA('No procede') === true);
+  check('C3 r2: esNA("Irrelevante") → true', esNA('Irrelevante') === true); }
+{ const d = con('c4-quote'); fs.writeFileSync(path.join(d, '.raw-fondo-on'), '');
+  check('C4 r2: irreversible citado (bash -c "vercel deploy") → BLOQUEA (no evade por comillas)', correrGate('bash -c "vercel deploy --prod"', d).code === 2);
+  check('C4 r2: aws s3 rb --force → BLOQUEA', correrGate('aws s3 rb s3://bucket --force', d).code === 2);
+  check('C4 r2: git push a rama que termina en -f → PERMITIDO (no falso positivo)', correrGate('git push origin feature-f', d).code === 0); }
+
+// ===== REGRESIONES RONDA 3 =====
+{ const d = tmpProyecto('sec-localhostdb'); fs.writeFileSync(path.join(d, 'm.js'), 'const u = "mongodb://root:' + 'S3cr3tPw9x@localhostdb.rds.amazonaws.com:27017/prod";\n');
+  check('C10 r3: host que EMPIEZA con localhost (localhostdb.rds) → BLOQUEA', correr(SECRETS, d).code === 1); }
+{ const d = tmpProyecto('sec-seed-precise'); fs.mkdirSync(path.join(d, 'seed'), { recursive: true }); fs.writeFileSync(path.join(d, 'seed', 'data.js'), 'export const key = "' + 'AIzaSyD3aBcDeFgH1jKl' + 'MnOpQrStUvWxYz012345";\n');
+  check('C10 r3: GCP key precisa en seed/ → BLOQUEA (preciso no se degrada)', correr(SECRETS, d).code === 1); }
+{ const d = tmpProyecto('sec-path'); fs.writeFileSync(path.join(d, 'docker-compose.yml'), 'PRIVATE_KEY=/etc/ssl/private/app.key\n');
+  check('C10 r3: env var = RUTA de archivo → NO bloquea (no es secreto)', correr(SECRETS, d).code === 0); }
+{ const d = tmpProyecto('sil-fixme'); fs.writeFileSync(path.join(d, 'a.test.js'), 'test.fixme("x", () => {});\n');
+  check('C39 r3: test.fixme → BLOQUEA', correr(SILENCIADO, d).code === 1); }
+{ const d = tmpProyecto('sil-unittest'); fs.writeFileSync(path.join(d, 'a_test.py'), '@unittest.skip("x")\ndef test_y(): pass\n');
+  check('C39 r3: @unittest.skip → BLOQUEA', correr(SILENCIADO, d).code === 1); }
+{ const d = tmpProyecto('deuda-rust'); fs.writeFileSync(path.join(d, 'lib.rs'), '// raw-deuda: X antes: 2020-01-01\n');
+  check('C38 r3: deuda vencida en .rs → BLOQUEA', correr(DEUDA, d).code === 1); }
+{ const { esNA, clavesRequeridas } = require('./raw-router');
+  check('C3 r3: esNA("N/C") → true', esNA('N/C') === true);
+  check('C3 r3: nota real que menciona "no aplica" a mitad → false', esNA('Se registra todo; no aplica el borrado físico') === false);
+  check('C3 r3: archivo importe.ts → requiere concurrencia', clavesRequeridas(['src/importe.ts'], '').has('concurrencia')); }
+{ const d = con('c4-am'); fs.writeFileSync(path.join(d, '.raw-fondo-on'), '');
+  check('C4 r3: git commit -am "...vercel deploy..." → PERMITIDO (mensaje de -am no bloquea)', correrGate('git commit -am "add vercel deploy config"', d).code === 0);
+  check('C4 r3: git push +refspec (force por +) → BLOQUEA', correrGate('git push origin +main', d).code === 2); }
+
+// ===== REGRESIONES RONDA 4 =====
+{ const d = tmpProyecto('sec-docker'); fs.writeFileSync(path.join(d, 'docker-compose.yml'), 'DATABASE_URL: postgres://postgres:' + 'postgres@db:5432/app\n');
+  check('C10 r4: postgres:postgres@db (docker dev) → NO bloquea', correr(SECRETS, d).code === 0); }
+{ const d = tmpProyecto('sec-prod-xxx'); fs.writeFileSync(path.join(d, 'f.env2'), 'DATABASE_URL=postgres://appuser:' + 'Kd8sPw02Zq@customer-xxx.abc.us-east-1.rds.amazonaws.com:5432/prod\n');
+  check('C10 r4: prod host que contiene "xxx" + creds reales → BLOQUEA', correr(SECRETS, d).code === 1); }
+{ const d = tmpProyecto('sec-longline'); fs.writeFileSync(path.join(d, 'x.js'), '// ' + 'x'.repeat(2500) + ' AKIA' + '1234567890ABCDEF\n');
+  check('C10 r4: secreto en línea >2000 chars → BLOQUEA (MAX_LINE subido)', correr(SECRETS, d).code === 1); }
+{ const d = tmpProyecto('sil-ws'); fs.writeFileSync(path.join(d, 'a.test.js'), 'it .skip("x", () => {});\n');
+  check('C39 r4: it .skip (espacio alrededor del punto) → BLOQUEA', correr(SILENCIADO, d).code === 1); }
+{ const d = tmpProyecto('sil-failing'); fs.writeFileSync(path.join(d, 'a.test.js'), 'test.failing("roto", () => {});\n');
+  check('C39 r4: test.failing → BLOQUEA', correr(SILENCIADO, d).code === 1); }
+{ const d = tmpProyecto('deuda-baddate'); fs.writeFileSync(path.join(d, 'x.js'), '// raw-deuda: X antes: 01-01-2025\n');
+  check('C38 r4: antes: en formato no-ISO → BLOQUEA (no se ignora en silencio)', correr(DEUDA, d).code === 1); }
+{ const { esNA, clavesRequeridas } = require('./raw-router');
+  check('C3 r4: esNA("No afecta el saldo") → true', esNA('No afecta el saldo') === true);
+  check('C3 r4: archivo reembolso.ts → requiere concurrencia', clavesRequeridas(['src/reembolso.ts'], '').has('concurrencia')); }
+{ const d = con('c4-r4'); fs.writeFileSync(path.join(d, '.raw-fondo-on'), '');
+  check('C4 r4: rm -i -rf (flags separados) → BLOQUEA', correrGate('rm -i -rf build', d).code === 2);
+  check('C4 r4: npm publish --dry-run → PERMITIDO (simulación)', correrGate('npm publish --dry-run', d).code === 0); }
+{ const d = con('c13-empty', fichaResuelta(true)); gitInit(d); gitStage(d, 'app.js', 'const x = 1;\n'); gitStage(d, 'CHANGELOG.md', '');
+  check('C13 r4: doc señuelo VACÍO (CHANGELOG.md) → BLOQUEADO (exige contenido)', correrGate('git commit -m "[cierre] b"', d).code === 2); }
+
+// ── C40 · raw-links: frescura documental (enlaces rotos + rango de ley declarado) ────────────────
+// El método declara que "un documento que dice algo que ya no es cierto es un BUG" y deja la frescura
+// en 📖 (deuda). Estos casos son la prueba de que ahora muerde — y, sobre todo, de que NO muerde donde
+// no debe: la prosa histórica cita lo viejo A PROPÓSITO y acusarla enseñaría a apagar el candado.
+const LINKS = path.join(HERE, 'raw-links.js');
+function proyDoc(sufijo, archivos) {
+  const d = tmpProyecto(sufijo);
+  marcarMetodo(d);
+  for (const [rel, txt] of Object.entries(archivos)) {
+    const abs = path.join(d, rel);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, txt);
+  }
+  return d;
+}
+// Ley con el §188 en el MEDIO y el §171 al FINAL: reproduce el engaño real (la última sección del
+// archivo NO es la de número más alto). Un chequeo que lea "la última" pasa en verde y no sirve.
+const LEY = '# Ley\n\n### §188\n188. **algo tardío.**\n\n### §171\n171. **algo con número menor.**\n';
+
+{ const d = proyDoc('links-rango-mal', { 'docs/INVARIABLES.md': LEY, 'CLAUDE.md': 'La ley vive en `docs/INVARIABLES.md` (§1–§171).\n' });
+  check('C40: CLAUDE.md declara §1–§171 con la ley en §188 → BLOQUEA (toma el MÁXIMO, no el último)', correr(LINKS, d).code === 1); }
+{ const d = proyDoc('links-rango-ok', { 'docs/INVARIABLES.md': LEY, 'CLAUDE.md': 'La ley vive en `docs/INVARIABLES.md` (§1–§188).\n' });
+  check('C40: rango declarado correcto → PASA', correr(LINKS, d).code === 0); }
+{ const d = proyDoc('links-rango-historico', { 'docs/INVARIABLES.md': LEY,
+    'docs/BITACORA.md': '## 2026-05-01 — bloque viejo\n\nEn ese momento la ley era `INVARIABLES.md` (§1–§171).\n' });
+  check('C40 falso-positivo: rango viejo en una BITÁCORA fechada → NO bloquea (era cierto entonces)', correr(LINKS, d).code === 0); }
+{ const d = proyDoc('links-roto', { 'docs/INVARIABLES.md': LEY, 'CLAUDE.md': 'Ver [la ficha](docs/_cobertura/B99.md).\n' });
+  check('C40: enlace relativo a un archivo que no existe → BLOQUEA', correr(LINKS, d).code === 1); }
+{ const d = proyDoc('links-roto-bitacora', { 'docs/INVARIABLES.md': LEY,
+    'docs/BITACORA.md': '## 2026-05-01\n\nDetalle en [la ficha](_cobertura/B99.md).\n' });
+  check('C40: un enlace roto SÍ importa en la bitácora (se clickea hoy, no en su fecha)', correr(LINKS, d).code === 1); }
+{ const d = proyDoc('links-fence', { 'docs/INVARIABLES.md': LEY,
+    'CLAUDE.md': 'Ejemplo de sintaxis:\n\n```md\n[así se enlaza](docs/NO-EXISTE.md)\n```\n' });
+  check('C40 falso-positivo: enlace dentro de un bloque de código → NO bloquea (es un ejemplo)', correr(LINKS, d).code === 0); }
+{ const d = proyDoc('links-details', { 'docs/INVARIABLES.md': LEY,
+    'docs/PROMPT-PROXIMA-SESION.md': '<details><summary>Histórico</summary>\n\nVer [esto](VIEJO.md) y la ley (§1–§171).\n\n</details>\n' });
+  check('C40 falso-positivo: prosa dentro de <details> histórico → NO bloquea', correr(LINKS, d).code === 0); }
+{ const d = proyDoc('links-archivo', { 'docs/INVARIABLES.md': LEY, 'docs/_archivo/VIEJO.md': 'Ver [esto](OTRO.md).\n' });
+  check('C40 falso-positivo: docs/_archivo/ → NO bloquea (prosa congelada)', correr(LINKS, d).code === 0); }
+{ const d = tmpProyecto('links-no-metodo'); fs.writeFileSync(path.join(d, 'x.md'), 'Ver [roto](NO.md).\n');
+  check('C40: fuera de un proyecto Raw Method → calla y pasa', correr(LINKS, d).code === 0); }
+
 
 process.stdout.write(`\n${fallos === 0 ? '✅ TODO EN VERDE' : `❌ ${fallos} fallo(s)`}\n`);
 process.exit(fallos === 0 ? 0 : 1);

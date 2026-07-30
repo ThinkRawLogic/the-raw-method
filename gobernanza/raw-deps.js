@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PARES = [
-  ['package.json', ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml']],
+  ['package.json', ['package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb', 'bun.lock']],
   ['Pipfile', ['Pipfile.lock']],
   ['pyproject.toml', ['poetry.lock', 'pdm.lock', 'uv.lock']],
   ['Gemfile', ['Gemfile.lock']],
@@ -27,7 +27,7 @@ function faltantes(dir) {
   const out = [];
   for (const [manifest, locks] of PARES) {
     const hayManifest = fs.existsSync(path.join(dir, manifest));
-    const hayLock = locks.some((l) => { try { return fs.statSync(path.join(dir, l)).size > 0; } catch (_) { return false; } }); // lockfile VACÍO no cuenta (C43)
+    const hayLock = locks.some((l) => { try { return fs.readFileSync(path.join(dir, l), 'utf8').trim().length > 0; } catch (_) { return false; } }); // lockfile vacío o de solo-espacios no cuenta (C43)
     if (hayManifest && !hayLock) out.push({ manifest, esperados: locks });
   }
   return out;

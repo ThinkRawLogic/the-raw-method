@@ -18,8 +18,8 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const MAX_FILE_KB = 500;
-const MAX_LINE = 2000;
+const MAX_FILE_KB = 5000;
+const MAX_LINE = 20000;
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', '__pycache__', '.venv', 'venv', 'env', '.tox',
   '.mypy_cache', '.pytest_cache', 'dist', 'build', '.next', '.nuxt', 'vendor', 'target', 'Pods',
@@ -27,7 +27,7 @@ const SKIP_DIRS = new Set(['.git', 'node_modules', '__pycache__', '.venv', 'venv
 const SKIP_EXT = new Set(['.png','.jpg','.jpeg','.gif','.ico','.svg','.webp','.woff','.woff2','.ttf',
   '.eot','.otf','.mp3','.mp4','.avi','.mov','.webm','.zip','.tar','.gz','.bz2','.7z','.rar','.pdf',
   '.doc','.docx','.xls','.xlsx','.pyc','.pyo','.class','.o','.so','.dylib','.dll','.exe','.bin',
-  '.dat','.db','.sqlite','.sqlite3','.lock','.map']);
+  '.dat','.db','.sqlite','.sqlite3','.lock']); // .map SÍ se escanea (source maps cargan secretos inlined)
 const SKIP_FILES = new Set(['package-lock.json','yarn.lock','pnpm-lock.yaml','Pipfile.lock',
   'poetry.lock','Cargo.lock','Gemfile.lock','go.sum','composer.lock',
   'raw-secrets.js']); // el propio scanner: sus patrones (private-key, etc.) no son secretos
@@ -62,7 +62,7 @@ const PATTERNS = [
   ['PGP Private Key', /-----BEGIN PGP PRIVATE KEY BLOCK-----/, 'critical', 'PGP private key'],
   ['Generic Private Key', /-----BEGIN PRIVATE KEY-----/, 'critical', 'private key PKCS#8'],
   ['OpenSSH Private Key', /-----BEGIN OPENSSH PRIVATE KEY-----/, 'critical', 'OpenSSH private key'],
-  ['JWT Token', /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, 'high', 'JSON Web Token'],
+  ['JWT Token', /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, 'medium', 'JSON Web Token (a menudo demo/expirable → reporta, no bloquea)'],
   ['npm Token', /npm_[A-Za-z0-9]{36}/i, 'critical', 'npm access token'],
   ['npm Auth Token', /\/\/registry\.npmjs\.org\/:_authToken=\S+/, 'critical', 'npm registry auth token'],
   ['PyPI Token', /pypi-[A-Za-z0-9_-]{50,}/, 'critical', 'PyPI API token'],
@@ -88,7 +88,9 @@ const TEST_INDICATORS = new Set(['test','tests','spec','specs','mock','mocks','f
 
 // OJO: NADA de '${' ni '{{' acá. Una interpolación de template literal NO es un placeholder —
 // en Next/TS los connection strings reales se arman con `${...}` y quedarían exentos (agujero C10).
-const ALLOWLIST_WORDS = ['placeholder','your_','your-','xxx','changeme','test_key','replace_me',
+// Sin 'xxx' — aparece en hostnames reales (customer-xxx.rds.aws.com). Los que quedan son
+// indicadores de placeholder claros. En connection strings NO se aplica (ver scanFile).
+const ALLOWLIST_WORDS = ['placeholder','your_','your-','changeme','test_key','replace_me',
   'insert_','<your','sk_test_','pk_test_','example','dummy'];
 
 function esAllowlisted(linea) {
@@ -99,6 +101,8 @@ function esArchivoTest(rel) {
   return rel.toLowerCase().replace(/\\/g, '/').split('/').some((parte) =>
     parte.split(/[-_./]/).some((seg) => TEST_INDICATORS.has(seg)));
 }
+// Archivo plantilla por convención: .template / .example / .sample (o esos sufijos). Son placeholder.
+function esPlantilla(rel) { return /(?:\.|_|-)(template|example|sample)(?:\.|$)/i.test(rel.replace(/\\/g, '/')); }
 // Un secreto CRITICAL (AWS key, connection string con credenciales) NUNCA se degrada por estar
 // en un archivo test/demo/seed: un secreto real ahí sigue siendo un secreto real. Solo bajamos
 // los 'high' (patrones más laxos) para no gritar en fixtures.
@@ -140,20 +144,35 @@ function scanFile(filepath, root, findings) {
     const linea = lineas[i];
     if (linea.length > MAX_LINE) continue;
     for (const [name, rx, sev, desc] of PATTERNS) {
-      if (rx.test(linea)) {
-        if (esAllowlisted(linea)) continue;
-        // Conexión a un host LOCAL (dev/CI/.env.example) NO es un secreto filtrado.
-        if (/Connection/i.test(name) && /@(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?|host\.docker\.internal)/i.test(linea)) continue;
-        // Password/secret hardcodeado cuyo VALOR es un default débil conocido (nunca un secreto real).
-        if (/Hardcoded|Env (?:Password|Secret|API)/i.test(name)) {
-          const vm = linea.match(/['"]([^'"]{1,40})['"]/);
-          if (vm && /^(?:postgres|admin|root|password|passwd|changeme|secret|example|test|user|dev|guest|public)$/i.test(vm[1])) continue;
-        }
-        const severidad = esTest ? bajarSeveridad(sev) : sev;
-        let ev = linea.trim(); if (ev.length > 160) ev = ev.slice(0, 160) + '...';
-        findings.push({ type: name, severity: severidad, file: rel, line: i + 1, description: desc, evidence: ev });
-        break; // un hallazgo por línea
+      const m = rx.exec(linea);
+      if (!m) continue;
+      const hit = m[0]; // el TEXTO DETECTADO, no la línea entera: así un 'example' en un comentario
+      // aparte NO exime el secreto, y un default-débil de decoy no roba la extracción de otro valor.
+      const esConn = /Connection/i.test(name);
+      // La allowlist de palabras NO se aplica a connection strings: el host/db puede contener
+      // 'example'/'xxx' sin que las CREDENCIALES dejen de ser reales.
+      if (!esConn && esAllowlisted(hit)) continue;
+      if (esConn) {
+        // host LOCAL con frontera derecha ('localhostdb.rds' NO es local):
+        if (/@(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?|host\.docker\.internal)(?=[:/\s"'`]|$)/i.test(hit)) continue;
+        // credenciales débiles default (postgres:postgres@db de docker-compose) → conexión dev, no secreto:
+        const cred = hit.match(/:\/\/[^:/@\s]+:([^@\s/]+)@/);
+        if (cred && /^(?:postgres|admin|root|password|passwd|secret|test|dev|user|guest|example|changeme)$/i.test(cred[1])) continue;
       }
+      if (/Hardcoded|Env (?:Password|Secret|API)/i.test(name)) {
+        let val = ''; const q = hit.match(/['"]([^'"]{1,60})['"]/);
+        if (q) val = q[1]; else { const eq = hit.match(/[=:]\s*(\S+)/); if (eq) val = eq[1]; }
+        if (/^(?:postgres|admin|root|password|passwd|changeme|secret|example|test|user|dev|guest|public|redacted)$/i.test(val)) continue;
+        if (/^(?:[.~]?\/|[A-Za-z]:[\\/])/.test(val) || /\.(?:key|pem|crt|p12|json|cert|conf)$/i.test(val)) continue; // ruta de archivo, no secreto
+      }
+      // Downgrade en test/seed SOLO para patrones FUZZY (Hardcoded/Env/Authorization); los PRECISOS
+      // (AIza, SK, key-, webhooks) NO se degradan → un secreto real en seed/ igual bloquea.
+      // Plantilla (.template/.example/.sample) → placeholder, no bloquea.
+      const fuzzy = /^(?:Hardcoded|Env|Authorization)/i.test(name);
+      const severidad = esPlantilla(rel) ? 'low' : (esTest && fuzzy ? bajarSeveridad(sev) : sev);
+      let ev = linea.trim(); if (ev.length > 160) ev = ev.slice(0, 160) + '...';
+      findings.push({ type: name, severity: severidad, file: rel, line: i + 1, description: desc, evidence: ev });
+      break; // un hallazgo por línea
     }
   }
 }
@@ -184,6 +203,8 @@ function gitIgnorados(root, archivos) {
   } catch (_) { return new Set(); }
 }
 
+// raw-deuda: cablear gitleaks/trufflehog para secretos multilínea y por-entropía (este piso escanea
+// por línea, no cruza \n ni evalúa entropía). Cuando el proyecto quiera secret-scanning serio. antes: 2026-12-31
 function escanear(dir) {
   const root = path.resolve(dir);
   const archivos = [];
