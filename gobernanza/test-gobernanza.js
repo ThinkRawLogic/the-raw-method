@@ -398,6 +398,43 @@ function correr(script, dir) { const r = spawnSync('node', [script, dir], { enco
 { const d = con('c13-empty', fichaResuelta(true)); gitInit(d); gitStage(d, 'app.js', 'const x = 1;\n'); gitStage(d, 'CHANGELOG.md', '');
   check('C13 r4: doc señuelo VACÍO (CHANGELOG.md) → BLOQUEADO (exige contenido)', correrGate('git commit -m "[cierre] b"', d).code === 2); }
 
+// ===== raw-ficha-firma (frescura de la ficha — nace con casos que DEBEN MORDER) =====
+{ const { verificar, firmar, hashArchivo } = require('./raw-ficha-firma');
+  const mkProy = (suf) => { const d = tmpProyecto(suf); fs.mkdirSync(path.join(d, 'docs', '_cobertura'), { recursive: true }); fs.mkdirSync(path.join(d, 'src'), { recursive: true }); return d; };
+  const ficha = (bloque, fecha, archivo, hash, ajuste) => `# Ficha ${bloque}\n\n**Fecha de cierre:** ${fecha}\n\n## Cobertura firmada\n- ${archivo}: ${hash}\n\n## Ajustes posteriores\n${ajuste || '(ninguno)'}\n`;
+  const w = (d, rel, c) => fs.writeFileSync(path.join(d, rel), c);
+
+  { const d = mkProy('firma-ok'); w(d, 'src/a.tsx', 'const BORNE = 34;\n');
+    w(d, 'docs/_cobertura/B25.md', ficha('B25', '2026-07-20', 'src/a.tsx', hashArchivo(d, 'src/a.tsx')));
+    w(d, 'docs/_cobertura/B26.md', ficha('B26', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    check('ficha-firma: sin cambios post-cierre → sin drift', verificar(d).length === 0); }
+
+  { const d = mkProy('firma-drift'); w(d, 'src/a.tsx', 'const BORNE = 34;\n');
+    w(d, 'docs/_cobertura/B25.md', ficha('B25', '2026-07-20', 'src/a.tsx', hashArchivo(d, 'src/a.tsx')));
+    w(d, 'docs/_cobertura/B26.md', ficha('B26', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    w(d, 'src/a.tsx', 'const BORNE = 27;\n'); // ¡PULIDO POSTERIOR! (el caso real de B26)
+    check('ficha-firma: archivo cubierto cambió post-cierre SIN acuse → DRIFT (MUERDE)', verificar(d).length === 1); }
+
+  { const d = mkProy('firma-acuse'); w(d, 'src/a.tsx', 'const BORNE = 34;\n');
+    w(d, 'docs/_cobertura/B25.md', ficha('B25', '2026-07-20', 'src/a.tsx', hashArchivo(d, 'src/a.tsx'), '- 2026-07-31: BORNE 34->27 (src/a.tsx), pulido post-cierre decidido por C.'));
+    w(d, 'docs/_cobertura/B26.md', ficha('B26', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    w(d, 'src/a.tsx', 'const BORNE = 27;\n');
+    check('ficha-firma: drift ACUSADO en "Ajustes posteriores" → limpio', verificar(d).length === 0); }
+
+  { const d = mkProy('firma-58a'); w(d, 'src/a.tsx', 'x\n'); w(d, 'src/b.tsx', 'const X = 1;\n');
+    w(d, 'docs/_cobertura/B25.md', ficha('B25', '2026-07-20', 'src/a.tsx', 'cafe12345678')); // B25 viejo, a.tsx no matchea → drift
+    w(d, 'docs/_cobertura/B26.md', ficha('B26', '2026-07-25', 'src/b.tsx', hashArchivo(d, 'src/b.tsx')));
+    w(d, 'src/b.tsx', 'const X = 2;\n'); // B26 (más reciente) cambió → EXIMIDO por §58a
+    const dr = verificar(d);
+    check('ficha-firma §58a: exime el bloque más reciente; el viejo SÍ cuenta', dr.length === 1 && dr[0].ficha === 'B25.md'); }
+
+  { const d = mkProy('firma-sellar'); w(d, 'src/a.tsx', 'const BORNE = 34;\n');
+    w(d, 'docs/_cobertura/B25.md', `# B25\n\n**Fecha de cierre:** 2026-07-20\n\n## Cobertura firmada\n- src/a.tsx\n\n## Ajustes posteriores\n(ninguno)\n`);
+    w(d, 'docs/_cobertura/B26.md', ficha('B26', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    firmar(d, 'docs/_cobertura/B25.md');
+    check('ficha-firma: firmar() sella los hashes → verificar limpio', verificar(d).length === 0 && /src\/a\.tsx:\s*[a-f0-9]{6,}/.test(fs.readFileSync(path.join(d, 'docs/_cobertura/B25.md'), 'utf8'))); }
+}
+
 // ── C40 · raw-links: frescura documental (enlaces rotos + rango de ley declarado) ────────────────
 // El método declara que "un documento que dice algo que ya no es cierto es un BUG" y deja la frescura
 // en 📖 (deuda). Estos casos son la prueba de que ahora muerde — y, sobre todo, de que NO muerde donde

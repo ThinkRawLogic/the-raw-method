@@ -74,3 +74,23 @@ ___
 > **El candado la exige** en toda ficha v3 (marcador `raw-ficha: v3` arriba): sin ella —o con la lista vacía— el cierre está **incompleto**, no cerrado. No juzga si la lista es *buena* (eso lo decide el dueño); garantiza que EXISTE.
 
 ___
+
+---
+
+## Cobertura firmada (candado `raw-ficha-firma` — al cerrar corré `firmar`)
+
+> Los archivos que son la FUENTE de las afirmaciones concretas de esta ficha (una medida, una
+> constante, un contrato). Listá las rutas; el hash lo pone `raw-ficha-firma firmar` al sellar. Si un
+> archivo cubierto cambia DESPUÉS del cierre sin acuse abajo, el gate falla **al cerrar el siguiente
+> bloque** — nunca en cada commit de pulido (§58a). **Sé preciso:** el archivo del claim, no todo lo
+> que tocó el commit (listar `globals.css` o `layout.tsx` = ruido de archivos compartidos).
+
+- src/ruta/del/archivo.tsx
+
+## Ajustes posteriores (pulido que cambió el código DESPUÉS del cierre)
+
+> Cuando el pulido contradice lo que la ficha afirma, registralo acá (fecha + qué cambió + archivo) y
+> re-firmá. Un cambio acusado deja de contar como "ficha mintiendo". Esto NO se hace commit a commit
+> (§58a): se reconcilia al cerrar el próximo bloque.
+
+(ninguno)
