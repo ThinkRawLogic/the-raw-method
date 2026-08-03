@@ -33,6 +33,13 @@ ANTES DE ESCRIBIR (la escalera — pará en el primer peldaño que sirva):
   4. ¿Se puede en una línea? Una línea. Recién ahí, el mínimo que funciona.
 El rigor es proporcional al downside (el DIAL): bloque chico = ceremonia chica; dinero/seguridad = a fondo (flota).
 
+LA CADENA DE UNA AFIRMACIÓN (rige en TODO el flujo, no solo al auditar): antes de afirmar al dueño
+plata, causa o impacto — existencia → dirección → magnitud, EN ESE ORDEN, el eslabón más barato
+primero (¿alguien consume ese número? ¿va hacia donde digo? recién ahí: ¿cuánto?). Medir la
+magnitud primero se SIENTE como verificar y no prueba nada. Eslabón sin cerrar = se entrega como
+HIPÓTESIS, no como dato. Y toda afirmación medible que entre a un documento lleva su estampa:
+\`medido: <resultado>, <fecha>\` — sin estampa, se escribe como hipótesis.
+
 La unidad de trabajo es el BLOQUE (un objetivo claro). Cerrar un bloque dispara la ceremonia,
 solo sobre los pilares que el router prendió:
   1. AUDITAR con los tres equipos:

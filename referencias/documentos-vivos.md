@@ -4,7 +4,7 @@ Un proyecto que se construye con The Raw Method no vive solo en el código. Vive
 
 La palabra clave es **vivos**. No son documentos que se escriben una vez y se olvidan. Se mantienen al día en el mismo momento en que cambia el código. Un documento que dice algo que ya no es cierto no es "documentación vieja" — es un **bug**, igual que una línea de código rota.
 
-Este archivo explica cada documento del ecosistema: **qué es** y **para qué sirve**. Al final están las tres reglas que valen para todos.
+Este archivo explica cada documento del ecosistema: **qué es** y **para qué sirve**. Al final están las cuatro reglas que valen para todos.
 
 ---
 
@@ -190,7 +190,7 @@ Regla de dedo: casi todo se toca en **dos momentos** — al **arrancar** (leer c
 
 ---
 
-# Las tres reglas que valen para TODOS los documentos
+# Las cuatro reglas que valen para TODOS los documentos
 
 ### 1. Un documento que miente sobre el estado del proyecto es un bug
 
@@ -205,6 +205,12 @@ No "después", no "cuando haya tiempo", no en una tarea aparte de "poner al día
 ### 3. Hay un orden de lectura al arrancar cada sesión
 
 Los documentos base no se leen a discreción: hay una **secuencia de arranque**. Se empieza por la ley (las reglas), después el diccionario de datos y la spec del bloque que se va a tocar, y se termina con el prompt de arranque que dice de dónde se retoma. Ese orden es lo que hace que cada sesión — y cada agente nuevo — herede el proyecto completo en vez de arrancar a ciegas.
+
+### 4. Una afirmación medible entra con su estampa: `medido: <resultado>, <fecha>`
+
+Cuando un documento afirma algo que se puede medir — *"esto pesa $X"*, *"son N pedidos"*, *"este disparador vigila Y"* — la afirmación entra **con el resultado de haberla medido y la fecha**, no como razonamiento plausible. Sin estampa es una hipótesis, y se escribe como tal (*"hipótesis, sin medir aún"*).
+
+La estampa no garantiza la interpretación — se puede medir bien y concluir mal; para eso está **la cadena de una afirmación** (`auditoria-adversaria.md` §2) — pero elimina la clase más barata del bug: la afirmación que nunca se midió y quedó escrita como hecho. Nació de un caso real: un "disparador" escrito en la ley de un proyecto afirmando un riesgo **con el signo invertido**, cuya query de alerta vigilaba justo el caso donde el fenómeno no estaba. Con estampa obligatoria, esa frase no habría podido entrar como hecho: medirla antes de escribirla habría mostrado los 0 casos.
 
 ---
 

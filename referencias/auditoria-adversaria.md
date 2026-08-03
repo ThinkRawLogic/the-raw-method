@@ -45,6 +45,29 @@ La solución es una segunda postura que convive con la primera:
 
 Es decir: **agresivo para buscar, escéptico para creer.** Encuentras como pesimista y confirmas como fiscal. Esta doble cara — atacar duro pero exigir prueba antes de acusar — es el corazón de la auditoría adversaria. Se llama **refutar por defecto**: cada hallazgo es mentira hasta que se demuestre lo contrario.
 
+### La tercera postura: la cadena de una afirmación (rige también FUERA de la auditoría)
+
+Atacar y refutar disparan cuando se audita. Pero la mayoría de las afirmaciones que un dueño escucha no nacen en una auditoría: nacen en medio del flujo — *"encontré que esto infla los números"*, *"este bug cuesta $1.754"*, *"la causa es el descuento"*. Ahí no hay Red Team que las frene, y una afirmación equivocada dicha con confianza hace el mismo daño que un bug: el dueño decide sobre ella.
+
+La regla:
+
+> **Toda afirmación de plata, causa o impacto recorre su cadena ANTES de entregarse: existencia → dirección → magnitud. En ese orden, y el eslabón más barato primero. Si un eslabón quedó sin verificar, la afirmación se entrega como HIPÓTESIS, no como dato.**
+
+- **Existencia** — ¿el efecto es real? ¿Alguien consume ese número? ¿El fenómeno está en los datos, o solo en mi razonamiento? *(El eslabón más barato — un grep, un GROUP BY — y el que más afirmaciones mata.)*
+- **Dirección** — ¿va hacia donde digo? ¿Infla o desinfla? ¿La causa precede al efecto?
+- **Magnitud** — recién ahora: ¿cuánto?
+
+**La trampa que esta regla mata: medir la magnitud primero.** Es la tentación natural — el número grande es el titular — y *se siente* como verificación, porque son queries y cifras. Pero la magnitud no prueba ni que el efecto exista ni hacia dónde va. Se puede medir con tres decimales un efecto que no existe.
+
+**El caso que parió la regla** (2026-08-02/03, dashboard en producción — cuatro caídas en una noche, todas con la misma pata):
+
+1. *"Esa cifra está inflada en pantalla"* — tres queries midiendo el TAMAÑO del error, sin el grep de 5 segundos que habría mostrado que **nadie consumía el número**. Movía $0.
+2. Quedó escrito **en la ley del proyecto**, como hecho, que una métrica "iba a inflar los ingresos a escala" — la flota adversaria lo refutó horas después: 0 casos en 28.716 pedidos, y el signo era el INVERSO (subestimaba).
+3. *"Las 112 están verificadas"* — la prueba dura confirmaba 3.
+4. Casi se "arreglan" 16 sitios por $1.754 "inflados" — un GROUP BY por mes mostró que los 593 pedidos eran todos de dos meses: **el inicio de la serie, no un bug**. Frenó el dueño, no el método.
+
+Y la moraleja es de método, no del caso: la regla **ya existía** como memoria 📖 de la IA — y no disparó bajo el entusiasmo del hallazgo. **📖 que ya mordió sube de capa en el mismo arreglo.** Por eso la cadena vive en el reflejo de sesión (`gobernanza/raw-session.js`, se inyecta en cada arranque) y las afirmaciones medibles que entran a un documento exigen **estampa de medición** (`documentos-vivos.md`, regla 4). La estampa caza a la que nunca se midió; la cadena, a la que se midió por el eslabón equivocado.
+
 ---
 
 ## 3. Las tres lentes (y la regla del 2 de 3)
