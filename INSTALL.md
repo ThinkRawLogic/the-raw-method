@@ -22,6 +22,30 @@ Hay tres formas, de la más automática a la manual:
 2. **Por comando** — escribí `/the-raw-method` para invocarlo a mano.
 3. **Mencionándolo** — decí *"aplicá The Raw Method"* / *"auditá con The Raw Method"* y Claude lo carga.
 
+## Modo siempre-activo (opcional, por máquina)
+
+Por defecto, el reflejo de sesión (`gobernanza/raw-session.js`) solo se inyecta dentro de un
+proyecto Raw Method (una carpeta —o un padre— con `.the-raw-method`, `docs/_cobertura`,
+`INVARIABLES.md`, etc.). Si querés que el método arranque en **toda** sesión de tu máquina,
+sea cual sea la carpeta, creá un marcador en tu carpeta de usuario:
+
+```bash
+touch ~/.claude/.the-raw-method
+```
+
+En Windows (PowerShell): `New-Item -ItemType File "$HOME\.claude\.the-raw-method"`.
+
+Dos aclaraciones:
+
+- Requiere tener la **gobernanza cableada** (los hooks de `gobernanza/hooks.json` en tu
+  `~/.claude/settings.json`) — sin eso, no hay hook que lea el flag. Ver `gobernanza/README.md`.
+- Solo afecta el **reflejo de sesión**. El gate de commits y la cobertura siguen operando sobre
+  la raíz real de cada proyecto (el marcador más cercano al proyecto gana), así que tus otros
+  repos no ganan fricción nueva. (Por eso el flag vive dentro de `~/.claude` y no en `~` directo:
+  ahí nunca cae en la búsqueda de raíces de proyecto.)
+
+Para desactivarlo, borrá el flag.
+
 ## Cómo se actualiza
 
 Cuando haya mejoras, actualizás con un `pull`:

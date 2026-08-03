@@ -15,6 +15,8 @@
 
 'use strict';
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 // Mismo criterio que el gate (con walk-up por los padres), reusando el módulo compartido.
 // Fallback defensivo: si el módulo no cargara, nunca rompemos el arranque de sesión.
@@ -69,7 +71,16 @@ function main() {
   } catch (_) {}
   if (process.env.CLAUDE_PROJECT_DIR) dir = process.env.CLAUDE_PROJECT_DIR;
 
-  if (!isMethodProject(dir)) return; // silencio fuera de un proyecto Raw Method
+  // Modo siempre-activo (opt-in POR MÁQUINA): el flag `~/.claude/.the-raw-method` prende el
+  // reflejo en TODA sesión de esa máquina, sin importar la carpeta. Vive DENTRO de ~/.claude
+  // (no en ~ directo) a propósito: así nunca queda en la ruta del walk-up de metodoRoot y el
+  // gate/cobertura no lo ven — solo afecta el reflejo. Cómo activarlo: ver INSTALL.md.
+  const siempreActivo = (() => {
+    try { return fs.existsSync(path.join(os.homedir(), '.claude', '.the-raw-method')); }
+    catch (_) { return false; }
+  })();
+
+  if (!isMethodProject(dir) && !siempreActivo) return; // silencio fuera de un proyecto Raw Method
 
   // Auto-actualización: ¿el método avanzó y este proyecto quedó atrás? Se lo inyectamos a la IA
   // (y lo marcamos en el banner del humano) para que adopte lo aditivo y traiga lo manual al dueño.

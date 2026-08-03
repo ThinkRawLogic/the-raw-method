@@ -87,11 +87,17 @@ function fichaV3(cerrada, revision) { // revision: 'ok' | 'vacia' | undefined (f
   return '<!-- raw-ficha: v3 -->\n' + base(cerrada, KEYS_OK()) + HONESTO + rev;
 }
 
-function correrGate(command, dir) {
-  const r = spawnSync('node', [GATE], { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: dir }), encoding: 'utf8' });
+function correrGate(command, dir, home) {
+  const opts = { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: dir }), encoding: 'utf8' };
+  if (home) opts.env = envHome(home);
+  const r = spawnSync('node', [GATE], opts);
   return { code: r.status, err: r.stderr || '' };
 }
-function correrSession(dir) { return spawnSync('node', [SESSION], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8' }).stdout || ''; }
+// Home NEUTRO por defecto: la máquina que corre la suite puede tener el modo siempre-activo
+// prendido (marcador `.the-raw-method` en su ~) y eso NO debe contaminar los tests.
+const HOME_NEUTRO = tmpProyecto('home-neutro');
+const envHome = (h) => ({ ...process.env, USERPROFILE: h, HOME: h });
+function correrSession(dir, home = HOME_NEUTRO) { return spawnSync('node', [SESSION], { input: JSON.stringify({ cwd: dir }), encoding: 'utf8', env: envHome(home) }).stdout || ''; }
 function correrCheck(dir) { const r = spawnSync('node', [CHECK, dir], { encoding: 'utf8' }); return { code: r.status, out: (r.stdout || '') + (r.stderr || '') }; }
 
 const con = (sufijo, ficha) => { const d = tmpProyecto(sufijo); marcarMetodo(d); if (ficha) ponerFicha(d, 'b.md', ficha); return d; };
@@ -113,6 +119,16 @@ function gitCommit(dir, msg) { spawnSync('git', ['-c', 'user.email=a@b.c', '-c',
 { check('gate: --no-verify NO evade (exit 2)', correrGate('git commit --no-verify -m "x"', con('nv', fichaConClaveMuda(true))).code === 2); }
 { const d = con('ses'); check('session: inyecta el reflejo en proyecto Raw Method', /THE RAW METHOD/.test(correrSession(d)));
   check('session: calla fuera del método', correrSession(tmpProyecto('ses2')).trim() === ''); }
+{ // Modo siempre-activo: el flag `~/.claude/.the-raw-method` → el REFLEJO se inyecta en
+  // cualquier carpeta de esa máquina. Vive dentro de ~/.claude (fuera del walk-up de
+  // metodoRoot) a propósito: el GATE no lo ve y los demás repos no ganan fricción.
+  const casa = tmpProyecto('home-marcado');
+  fs.mkdirSync(path.join(casa, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(casa, '.claude', '.the-raw-method'), 'siempre\n');
+  check('session: modo siempre-activo (~/.claude/.the-raw-method) → reflejo fuera de un proyecto',
+    /THE RAW METHOD/.test(correrSession(tmpProyecto('ses-siempre'), casa)));
+  check('gate: el flag del modo siempre-activo NO prende el gate (proyecto ajeno → PERMITIDO)',
+    correrGate('git commit -m "x"', tmpProyecto('nometodo-siempre'), casa).code === 0); }
 { // El reflejo no es solo el banner: es la subida de capa de reglas que ya mordieron por vivir
   // en 📖. Si un refactor borra una de estas del template, la regla revierte a memoria EN
   // SILENCIO con la suite en verde — exactamente la falla que la subida de capa vino a cerrar.
