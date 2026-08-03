@@ -1,6 +1,6 @@
 # Auditoría adversaria (el Red Team)
 
-Esta es la pata de **verificar** del método. Aquí se explica **cómo se corre**: con qué postura, cómo se confirma un hallazgo sin inflar la lista, cómo se organiza la flota de agentes, dónde se puede probar en vivo y sin riesgo, y cómo se entrega el reporte. Sirve para cualquier proyecto — no depende de ninguna regla numerada de un proyecto en particular.
+Esta es la pata de **verificar** del método. Aquí se explica **cómo se corre**: con qué postura, cómo se confirma un hallazgo sin inflar la lista, cómo se organiza la flota de agentes, dónde se puede probar en vivo y sin riesgo, y cómo se entrega el reporte. Vive acá también **la cadena de una afirmación** (§2) — la postura que rige *fuera* de la auditoría, en el flujo diario. Sirve para cualquier proyecto — no depende de ninguna regla numerada de un proyecto en particular.
 
 ---
 
@@ -59,12 +59,12 @@ La regla:
 
 **La trampa que esta regla mata: medir la magnitud primero.** Es la tentación natural — el número grande es el titular — y *se siente* como verificación, porque son queries y cifras. Pero la magnitud no prueba ni que el efecto exista ni hacia dónde va. Se puede medir con tres decimales un efecto que no existe.
 
-**El caso que parió la regla** (2026-08-02/03, dashboard en producción — cuatro caídas en una noche, todas con la misma pata):
+**El caso que parió la regla** (2026-08-02/03, un dashboard de ventas en producción — cuatro caídas en una noche, todas con la misma pata):
 
 1. *"Esa cifra está inflada en pantalla"* — tres queries midiendo el TAMAÑO del error, sin el grep de 5 segundos que habría mostrado que **nadie consumía el número**. Movía $0.
-2. Quedó escrito **en la ley del proyecto**, como hecho, que una métrica "iba a inflar los ingresos a escala" — la flota adversaria lo refutó horas después: 0 casos en 28.716 pedidos, y el signo era el INVERSO (subestimaba).
-3. *"Las 112 están verificadas"* — la prueba dura confirmaba 3.
-4. Casi se "arreglan" 16 sitios por $1.754 "inflados" — un GROUP BY por mes mostró que los 593 pedidos eran todos de dos meses: **el inicio de la serie, no un bug**. Frenó el dueño, no el método.
+2. Quedó escrito **en la ley del proyecto**, como hecho, que una métrica "iba a inflar los ingresos a escala" — la flota adversaria lo refutó horas después: **0 casos en las decenas de miles de pedidos del historial**, y el signo era el INVERSO (subestimaba).
+3. *"Los 112 pedidos afectados están verificados"* — la prueba dura confirmaba **3**.
+4. Casi se "arreglan" **16 lugares del código** por ~$1.800 "inflados" — un GROUP BY por mes mostró que los ~600 pedidos "defectuosos" eran todos de los dos primeros meses: **el inicio de la serie, no un bug**. Frenó el dueño, no el método.
 
 Y la moraleja es de método, no del caso: la regla **ya existía** como memoria 📖 de la IA — y no disparó bajo el entusiasmo del hallazgo. **📖 que ya mordió sube de capa en el mismo arreglo.** Por eso la cadena vive en el reflejo de sesión (`gobernanza/raw-session.js`, se inyecta en cada arranque) y las afirmaciones medibles que entran a un documento exigen **estampa de medición** (`documentos-vivos.md`, regla 4). La estampa caza a la que nunca se midió; la cadena, a la que se midió por el eslabón equivocado.
 

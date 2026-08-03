@@ -67,7 +67,7 @@ Auditar no es un solo lente — son **tres preguntas distintas** que no hay que 
 ### 🔴 Red Team — ¿está roto?
 Auditar **no es buscar lo que se hizo bien**. Es lo contrario: se parte del supuesto de que **algo está mal o se diseñó mal**, y se ataca el código para encontrarlo. El auditor piensa como quien quiere *romper* el sistema, no como quien lo felicita.
 
-Pero hay una segunda cara que evita inflar la lista de problemas: **refutar por defecto.**
+Pero hay una segunda postura que evita inflar la lista de problemas: **refutar por defecto.**
 
 - **Al cazar** → asume que está roto. Busca activamente el agujero. No confirmes lo bueno.
 - **Al confirmar un hallazgo** → asúmelo *falso* hasta que el código pruebe que es real. Se mira con **las 3 lentes (3 jueces independientes, ortogonales)** y **solo sobrevive lo que 2 de 3 no logran refutar**:
@@ -260,7 +260,7 @@ Cada pilar tiene un nombre en llano + su término técnico, y trae *qué chequea
 ## Índice: referencias, plantillas y kit operativo
 
 - `referencias/pilares.md` — los 16 ángulos con briefing + cómo atacarlo (auditoría adversaria).
-- `referencias/auditoria-adversaria.md` — cómo se corre el Red Team: postura, 3 lentes, **la criba**, flota, loop-hasta-secar, formato de reporte.
+- `referencias/auditoria-adversaria.md` — cómo se corre el Red Team: postura, 3 lentes, **la criba**, flota, loop-hasta-secar, formato de reporte — y **la cadena de una afirmación**, la postura que rige fuera de la auditoría.
 - `referencias/modelos-ia.md` — qué modelo para qué tarea, con analogías.
 - `referencias/documentos-vivos.md` — el ecosistema de documentos y para qué sirve cada uno.
 - `referencias/candados-y-capas.md` — las 3 capas de enforcement y cómo se construye un candado.

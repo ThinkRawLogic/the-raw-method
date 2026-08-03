@@ -212,6 +212,8 @@ Cuando un documento afirma algo que se puede medir — *"esto pesa $X"*, *"son N
 
 La estampa no garantiza la interpretación — se puede medir bien y concluir mal; para eso está **la cadena de una afirmación** (`auditoria-adversaria.md` §2) — pero elimina la clase más barata del bug: la afirmación que nunca se midió y quedó escrita como hecho. Nació de un caso real: un "disparador" escrito en la ley de un proyecto afirmando un riesgo **con el signo invertido**, cuya query de alerta vigilaba justo el caso donde el fenómeno no estaba. Con estampa obligatoria, esa frase no habría podido entrar como hecho: medirla antes de escribirla habría mostrado los 0 casos.
 
+**Capa:** 👁 — vive en el reflejo de sesión (`gobernanza/raw-session.js`, fijado por test) y se revisa al cerrar. Considerado el candado 🤖 parcial (un chequeo estilo `raw-links` que busque cifras de plata sin un `medido:` cerca): **no construido aún** — el borde de "qué cuenta como afirmación medible" es juicio, y un candado con falsos positivos frecuentes se termina silenciando, que es peor. Queda declarado como candidata: si esta regla muerde una vez, el proxy se construye en el mismo arreglo.
+
 ---
 
 *The Raw Method · Raw Logic · No fluff. No licenses. No surprises.*

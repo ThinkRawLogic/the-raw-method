@@ -113,6 +113,16 @@ function gitCommit(dir, msg) { spawnSync('git', ['-c', 'user.email=a@b.c', '-c',
 { check('gate: --no-verify NO evade (exit 2)', correrGate('git commit --no-verify -m "x"', con('nv', fichaConClaveMuda(true))).code === 2); }
 { const d = con('ses'); check('session: inyecta el reflejo en proyecto Raw Method', /THE RAW METHOD/.test(correrSession(d)));
   check('session: calla fuera del método', correrSession(tmpProyecto('ses2')).trim() === ''); }
+{ // El reflejo no es solo el banner: es la subida de capa de reglas que ya mordieron por vivir
+  // en 📖. Si un refactor borra una de estas del template, la regla revierte a memoria EN
+  // SILENCIO con la suite en verde — exactamente la falla que la subida de capa vino a cerrar.
+  // (Hallazgo del Red Team del propio bloque que metió la cadena, 2026-08-03: el commit decía
+  // "deja de depender de la memoria" y ningún test lo fijaba.)
+  const d = con('ses3'); const out = correrSession(d);
+  check('session: el reflejo trae LA CADENA DE UNA AFIRMACIÓN (existencia→dirección→magnitud)',
+    /CADENA DE UNA AFIRMACI/.test(out) && /existencia\s*→\s*direcci/i.test(out));
+  check('session: el reflejo trae la estampa de medición (medido: <resultado>, <fecha>)',
+    /medido:\s*<resultado>,\s*<fecha>/.test(out)); }
 { const d = con('bom', fichaConClaveMuda(true));
   const payload = "\uFEFF" + JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'git commit -m x' }, cwd: d });
   check('gate: payload con BOM (Windows) → BLOQUEA', spawnSync('node', [GATE], { input: payload, encoding: 'utf8' }).status === 2); }

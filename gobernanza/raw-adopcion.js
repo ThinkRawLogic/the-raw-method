@@ -2,7 +2,7 @@
 /**
  * raw-adopcion.js — el auto-actualizador del método en los proyectos (The Raw Method).
  * ===================================================================================
- * "Hoy es el Portal, mañana el Aleo. No puedo conciliar a mano." (norma de C, 2026-07-25).
+ * "Hoy es un proyecto, mañana el siguiente. No puedo conciliar a mano." (norma del dueño, 2026-07-25).
  * El método lleva una VERSIÓN; cada proyecto anota cuál adoptó (`.raw-method-version`). Este
  * script compara y cierra la brecha SOLO:
  *   - las mejoras ADITIVAS (auto) se aplican solas,
