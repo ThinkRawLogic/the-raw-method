@@ -44,6 +44,10 @@ function hookVivo(dir, nombre) {
 
 function leer(f) { try { return fs.readFileSync(f, 'utf8'); } catch (_) { return ''; } }
 
+// Extrae el sello MOTOR_VERSION del texto de un raw-ficha-firma (el motor del skill o la copia .cjs
+// de un proyecto). null si no lo tiene (una copia vieja, previa al sello) → cuenta como desactualizada.
+function versionMotor(texto) { const m = (texto || '').match(/MOTOR_VERSION\s*=\s*['"]([\w.]+)['"]/); return m ? m[1] : null; }
+
 const ADOPCIONES = [
   {
     id: 'convivencia-guard-rama',
@@ -132,6 +136,47 @@ const ADOPCIONES = [
       return true;
     },
     instruccion: 'Agregá una sección "Qué revisar — para el dueño" a la plantilla de ficha de cierre.',
+  },
+  {
+    id: 'ficha-firma-motor',
+    desde: '2026.08.04',
+    titulo: 'El candado raw-ficha-firma se actualiza al motor vigente del método (frescura de la ficha)',
+    auto: true, // es un archivo del MÉTODO vendorado en el proyecto, no lógica propia → seguro de refrescar
+    _cjs(dir) { const f = path.join(dir, 'src', 'lib', 'raw-ficha-firma.cjs'); try { return fs.existsSync(f) ? f : null; } catch (_) { return null; } },
+    detectar(dir) {
+      const f = this._cjs(dir);
+      if (!f) return false; // no tiene el candado → eso lo mira 'ficha-firma-instalar', no ésta
+      const vSkill = versionMotor(leer(path.join(__dirname, 'raw-ficha-firma.js')));
+      return !!vSkill && versionMotor(leer(f)) !== vSkill; // sello distinto (o ausente) = copia vieja
+    },
+    aplicar(dir) {
+      const f = this._cjs(dir);
+      if (!f) return false;
+      try { fs.copyFileSync(path.join(__dirname, 'raw-ficha-firma.js'), f); return true; } catch (_) { return false; }
+    },
+    instruccion: 'Re-copiá src/lib/raw-ficha-firma.cjs desde gobernanza/raw-ficha-firma.js del método.',
+  },
+  {
+    id: 'ficha-firma-instalar',
+    desde: '2026.08.04',
+    titulo: 'Un proyecto que USA fichas de cobertura pero NO tiene el candado raw-ficha-firma queda desprotegido',
+    auto: false, // instalar toca conformance.test + eslint del proyecto → OK del dueño
+    _usaFichas(dir) {
+      for (const p of ['docs/_cobertura/_PLANTILLA.md', '_cobertura/_PLANTILLA.md', 'docs/_cobertura/_plantilla.md', 'plantillas/ficha-cobertura.md']) {
+        try { if (fs.existsSync(path.join(dir, p))) return true; } catch (_) {}
+      }
+      return false;
+    },
+    detectar(dir) {
+      if (!this._usaFichas(dir)) return false; // no usa fichas → el candado no aplica (no molesta)
+      try { return !fs.existsSync(path.join(dir, 'src', 'lib', 'raw-ficha-firma.cjs')); } catch (_) { return false; }
+    },
+    instruccion:
+      'Usás fichas de cobertura pero no tenés el candado que las vigila (una ficha puede quedar mintiendo ' +
+      'y ningún gate lo vería). Instalalo: copiá gobernanza/raw-ficha-firma.js del método a ' +
+      'src/lib/raw-ficha-firma.cjs, ignoralo en eslint (globalIgnores), agregá el chequeo ' +
+      'verificar(process.cwd()) a tu conformance.test.ts, y las secciones "Cobertura firmada" + ' +
+      '"Ajustes posteriores" a la plantilla de ficha.',
   },
 ];
 

@@ -353,10 +353,49 @@ function correr(script, dir) { const r = spawnSync('node', [script, dir], { enco
   const d1 = mk('adopt-need');
   check('adopción: plantilla sin "Qué revisar" → detecta pendiente', revisar(d1).pendientes.some((p) => p.id === 'ficha-que-revisar'));
   const d2 = mk('adopt-apply'); adoptar(d2);
-  check('adopción: --aplicar agrega la sección sola y queda al día', revisar(d2).pendientes.length === 0 && /Qué revisar/.test(fs.readFileSync(path.join(d2, 'docs', '_cobertura', '_PLANTILLA.md'), 'utf8')));
+  check('adopción: --aplicar agrega la sección sola y queda al día', !revisar(d2).pendientes.some((p) => p.id === 'ficha-que-revisar') && /Qué revisar/.test(fs.readFileSync(path.join(d2, 'docs', '_cobertura', '_PLANTILLA.md'), 'utf8')));
   check('adopción: registra la versión adoptada (.raw-method-version)', fs.existsSync(path.join(d2, '.raw-method-version')));
   const d3 = tmpProyecto('adopt-none');
   check('adopción: proyecto que no usa fichas → sin pendientes (no molesta)', revisar(d3).pendientes.length === 0); }
+
+// PROPAGACIÓN del candado raw-ficha-firma por adopción (mata R6: la copia .cjs deja de sincronizarse a mano):
+{ const { revisar, adoptar } = require('./raw-adopcion');
+  // instalar: USA fichas (plantilla) pero NO tiene el candado → lo REPORTA (auto:false, OK del dueño).
+  const dInst = tmpProyecto('adopt-ficha-inst'); fs.mkdirSync(path.join(dInst, 'docs', '_cobertura'), { recursive: true });
+  fs.writeFileSync(path.join(dInst, 'docs', '_cobertura', '_PLANTILLA.md'), '# Ficha\n\n## Cobertura firmada\n');
+  { const p = revisar(dInst).pendientes.find((x) => x.id === 'ficha-firma-instalar');
+    check('adopción ficha-firma: usa fichas y SIN candado → reporta instalar (auto:false, OK dueño)', !!p && p.auto === false); }
+  // motor viejo: tiene el candado pero SIN sello → detecta pendiente y AUTO-actualiza al motor del skill.
+  const dOld = tmpProyecto('adopt-ficha-old');
+  fs.mkdirSync(path.join(dOld, 'src', 'lib'), { recursive: true }); fs.mkdirSync(path.join(dOld, 'docs', '_cobertura'), { recursive: true });
+  fs.writeFileSync(path.join(dOld, 'docs', '_cobertura', '_PLANTILLA.md'), '# Ficha\n');
+  fs.writeFileSync(path.join(dOld, 'src', 'lib', 'raw-ficha-firma.cjs'), '// copia vieja sin sello\nmodule.exports = {};\n');
+  check('adopción ficha-firma: candado con motor VIEJO (sin sello) → detecta pendiente (auto)',
+    revisar(dOld).pendientes.some((p) => p.id === 'ficha-firma-motor'));
+  adoptar(dOld);
+  check('adopción ficha-firma: --aplicar copia el motor del skill (ahora con sello) → al día',
+    /MOTOR_VERSION/.test(fs.readFileSync(path.join(dOld, 'src', 'lib', 'raw-ficha-firma.cjs'), 'utf8')) &&
+    !revisar(dOld).pendientes.some((p) => p.id === 'ficha-firma-motor'));
+  // idempotente: una copia YA al día no se re-marca.
+  const dOk = tmpProyecto('adopt-ficha-ok'); fs.mkdirSync(path.join(dOk, 'src', 'lib'), { recursive: true });
+  fs.copyFileSync(path.join(HERE, 'raw-ficha-firma.js'), path.join(dOk, 'src', 'lib', 'raw-ficha-firma.cjs'));
+  check('adopción ficha-firma: copia al día → NO se re-marca (idempotente)',
+    !revisar(dOk).pendientes.some((p) => p.id === 'ficha-firma-motor')); }
+
+// GUARD del sello: si el motor cambia y MOTOR_VERSION no, la adopción propagaría mintiendo "están al día".
+// Este test lo impide: fija el hash de la LÓGICA (motor sin la línea del sello) + la versión; tocar el
+// motor rompe el hash → hay que subir MOTOR_VERSION y actualizar SELLO acá. Convierte el "no me olvido
+// de versionar" en candado, no en disciplina.
+{ const crypto = require('crypto');
+  const src = fs.readFileSync(path.join(HERE, 'raw-ficha-firma.js'), 'utf8');
+  const selloMotor = (src.match(/const MOTOR_VERSION\s*=\s*['"]([\w.]+)['"]/) || [])[1];
+  const logica = src.replace(/const MOTOR_VERSION\s*=\s*['"][\w.]+['"];?/, '');
+  const logicHash = crypto.createHash('sha256').update(logica).digest('hex').slice(0, 12);
+  const SELLO = { version: '2026.08.04', hash: '59fc5123ccbf' };
+  check('motor-version: el motor lleva sello MOTOR_VERSION', !!selloMotor);
+  check('motor-version: el sello del motor coincide con el SELLO del test', selloMotor === SELLO.version);
+  check('motor-version: si cambiás el motor, subí MOTOR_VERSION y este hash (SELLO en test-gobernanza)',
+    logicHash === SELLO.hash); }
 
 // CONVIVENCIA: las adopciones de trabajo en equipo. Lo que más importa probar no es que
 // se enciendan, sino que NO molesten a quien trabaja solo — una regla que estorba se arranca.

@@ -26,6 +26,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+// Sello del motor: la adopción (adopciones.js) lo usa para saber si la copia .cjs de un proyecto
+// quedó vieja y hay que re-propagarla. SUBILO cada vez que cambie la lógica del motor — el test
+// "motor-version" de test-gobernanza.js FALLA si tocás el motor sin subir el sello (así la
+// propagación nunca cree "están al día" mintiendo).
+const MOTOR_VERSION = '2026.08.04';
+
 function hashArchivo(dir, rel) {
   try { return crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, rel))).digest('hex').slice(0, 12); }
   catch { return 'FALTA'; } // archivo borrado/renombrado también es drift
@@ -153,7 +159,7 @@ function firmar(dir, fichaRel) {
   return firmados;
 }
 
-module.exports = { hashArchivo, fechaCierre, parseCobertura, acusado, leerFichas, verificar, firmar };
+module.exports = { MOTOR_VERSION, hashArchivo, fechaCierre, parseCobertura, acusado, leerFichas, verificar, firmar };
 
 if (require.main === module) {
   const modo = process.argv[2];
