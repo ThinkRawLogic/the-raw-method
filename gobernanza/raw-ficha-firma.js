@@ -36,24 +36,61 @@ function fechaCierre(texto) {
   return m ? m[1] : null;
 }
 
+// UNA sola definición de "línea de ruta cubierta": prefijo (bullet/sangría) + ruta + `: hash` opcional.
+// La ruta es CUALQUIER token sin espacios ni `:` — admite acentos/ñ, corchetes de App Router ([id]),
+// paréntesis (grupo), @slot, todo — SIN enumerar caracteres (enumerar siempre deja alguno afuera: el
+// Red Team cazó que `\w` es ASCII y tiraba `src/página.tsx` en silencio). Las rutas del repo son
+// relativas, sin `:`, así que `[^\s:]+` no colisiona con el separador del hash.
+const RUTA_RE = /^(\s*[-*]?\s*)([^\s:]+\.[a-z0-9]+)\s*(?::\s*([a-f0-9]{6,}|FALTA))?\s*$/i;
+
+// Cuerpo de la sección <titulo> hasta el PRÓXIMO heading de nivel <= al de la sección (así sub-headings
+// `###` y separadores `---` internos NO cortan; sólo frena en el próximo `##`), o fin de archivo. UNA
+// definición de "dónde termina la sección" que comparten parseCobertura, acusado y firmar — para que
+// sus bordes NO puedan divergir (esa divergencia era un hueco: firmar firmaba lo que parse no veía).
+function seccion(texto, titulo) {
+  const lineas = (texto || '').split('\n');
+  let ini = -1, nivel = 0;
+  const reTit = new RegExp('^(#{1,6})\\s*' + titulo, 'i');
+  for (let i = 0; i < lineas.length; i++) {
+    const h = lineas[i].match(reTit);
+    if (h) { nivel = h[1].length; ini = i + 1; break; }
+  }
+  if (ini === -1) return null;
+  let fin = lineas.length;
+  for (let i = ini; i < lineas.length; i++) {
+    const h = lineas[i].match(/^(#{1,6})\s/);
+    if (h && h[1].length <= nivel) { fin = i; break; }
+  }
+  return { lineas, ini, fin, cuerpo: lineas.slice(ini, fin).join('\n') };
+}
+
 // Parsea la sección "Cobertura firmada": líneas `path.ext: hash` (o `path.ext` sin firmar aún).
 function parseCobertura(texto) {
-  const m = (texto || '').match(/#{1,6}\s*Cobertura firmada[^\n]*\n([\s\S]*?)(?:\n#{1,6}\s|\n---|\s*$)/i);
-  if (!m) return [];
+  const s = seccion(texto, 'Cobertura firmada');
+  if (!s) return [];
   const out = [];
-  for (const linea of m[1].split('\n')) {
-    const mm = linea.match(/^\s*[-*]?\s*([\w./\\-]+\.[a-z0-9]+)\s*(?::\s*([a-f0-9]{6,}|FALTA))?\s*$/i);
-    if (mm) out.push({ archivo: mm[1].replace(/\\/g, '/'), hash: mm[2] || null });
+  for (let i = s.ini; i < s.fin; i++) {
+    const mm = s.lineas[i].match(RUTA_RE);
+    if (mm) out.push({ archivo: mm[2].replace(/\\/g, '/'), hash: mm[3] || null });
   }
   return out;
 }
 
 // ¿La ficha ACUSA un cambio en <archivo> en su sección "Ajustes posteriores"?
+// Matchea la ruta declarada como TOKEN COMPLETO (no substring): a los lados, inicio/fin o un carácter
+// que NO continúa una ruta (`\w . / \ @ -`). Tres cosas que el Red Team exigió, de una:
+//  · acota a la sección (vía seccion()) → si "Ajustes" va ANTES de "Cobertura", no se traga la lista;
+//  · exige ruta completa (no basename) → acusar un page.tsx no tapa a otro homónimo;
+//  · token exacto (no `.includes`) → 'admin/ui/card.tsx' NO absuelve a 'ui/card.tsx' (sufijo-substring).
+// Tolera './' y backslashes a ambos lados. Dirección segura: ante la duda, NO absuelve (sobre-avisa).
 function acusado(texto, archivo) {
-  const m = (texto || '').match(/#{1,6}\s*Ajustes posteriores[\s\S]*/i);
-  if (!m) return false;
-  const base = path.basename(archivo).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return m[0].includes(archivo) || new RegExp('\\b' + base + '\\b', 'i').test(m[0]);
+  const s = seccion(texto, 'Ajustes posteriores');
+  if (!s) return false;
+  const cuerpo = s.cuerpo.replace(/\\/g, '/');
+  const objetivo = archivo.replace(/\\/g, '/').replace(/^\.\//, '');
+  const esc = objetivo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const borde = '[^\\w./\\\\@-]'; // sólo lo que SÍ continúa una ruta no cuenta como borde
+  return new RegExp('(^|' + borde + ')(?:\\./)?' + esc + '($|' + borde + ')').test(cuerpo);
 }
 
 function leerFichas(dir) {
@@ -93,20 +130,27 @@ function verificar(dir) {
 }
 
 // Escribe/actualiza los hashes de la sección "Cobertura firmada" de UNA ficha (al sellar/cerrar).
+// Usa la MISMA seccion() y el MISMO RUTA_RE que parseCobertura → firmar y verificar NO pueden discrepar
+// sobre el límite de la sección ni sobre qué es una ruta (antes divergían: un archivo tras un '----'
+// quedaba firmado pero invisible). Firma por índice de línea (no replace global), preservando todo lo
+// demás y el CRLF de la línea. Si NINGUNA ruta se pudo firmar, lanza (no miente "firmado"). Se hashea
+// la ruta normalizada pero se conserva la ruta tal cual la escribió el autor.
 function firmar(dir, fichaRel) {
   const p = path.isAbsolute(fichaRel) ? fichaRel : path.join(dir, fichaRel);
-  let texto = fs.readFileSync(p, 'utf8');
-  const cob = parseCobertura(texto);
-  if (!cob.length) throw new Error('la ficha no tiene una sección "Cobertura firmada" con archivos');
-  let nuevo = texto;
-  for (const { archivo } of cob) {
-    const h = hashArchivo(dir, archivo);
-    // reemplaza la línea del archivo con `archivo: hash` (con o sin hash previo)
-    const re = new RegExp('^(\\s*[-*]?\\s*)' + archivo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s*:\\s*[a-f0-9]+|\\s*:\\s*FALTA)?\\s*$', 'im');
-    nuevo = nuevo.replace(re, `$1${archivo}: ${h}`);
+  const s = seccion(fs.readFileSync(p, 'utf8'), 'Cobertura firmada');
+  if (!s) throw new Error('la ficha no tiene una sección "Cobertura firmada"');
+  const lineas = s.lineas;
+  let firmados = 0;
+  for (let i = s.ini; i < s.fin; i++) {
+    const mm = lineas[i].match(RUTA_RE);
+    if (!mm) continue;
+    const cr = lineas[i].endsWith('\r') ? '\r' : ''; // preserva CRLF (Windows): sólo esta línea se reescribe
+    lineas[i] = `${mm[1]}${mm[2]}: ${hashArchivo(dir, mm[2].replace(/\\/g, '/'))}${cr}`;
+    firmados++;
   }
-  fs.writeFileSync(p, nuevo);
-  return cob.length;
+  if (!firmados) throw new Error('la ficha no tiene una sección "Cobertura firmada" con archivos');
+  fs.writeFileSync(p, lineas.join('\n'));
+  return firmados;
 }
 
 module.exports = { hashArchivo, fechaCierre, parseCobertura, acusado, leerFichas, verificar, firmar };

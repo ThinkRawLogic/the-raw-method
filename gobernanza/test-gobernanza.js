@@ -503,6 +503,104 @@ function correr(script, dir) { const r = spawnSync('node', [script, dir], { enco
     w(d, 'docs/_cobertura/B26.md', ficha('B26', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
     firmar(d, 'docs/_cobertura/B25.md');
     check('ficha-firma: firmar() sella los hashes → verificar limpio', verificar(d).length === 0 && /src\/a\.tsx:\s*[a-f0-9]{6,}/.test(fs.readFileSync(path.join(d, 'docs/_cobertura/B25.md'), 'utf8'))); }
+
+  // ── REGRESIONES DEL RED-TEAM (2026-08-03): 5 falsos-negativos silenciosos, cada uno MUERDE ──
+  // A — ruta de App Router bajo segmento dinámico [codigo]: el parser la descartaba entera.
+  { const d = mkProy('firma-dinamica'); fs.mkdirSync(path.join(d, 'src/app/[codigo]'), { recursive: true });
+    w(d, 'src/app/[codigo]/page.tsx', 'const BORNE = 34;\n');
+    w(d, 'docs/_cobertura/B30.md', ficha('B30', '2026-07-20', 'src/app/[codigo]/page.tsx', hashArchivo(d, 'src/app/[codigo]/page.tsx')));
+    w(d, 'docs/_cobertura/B31.md', ficha('B31', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    w(d, 'src/app/[codigo]/page.tsx', 'const BORNE = 27;\n');
+    check('ficha-firma A: drift en ruta App Router [codigo] → MUERDE (antes el parser la tiraba)', verificar(d).length === 1); }
+
+  // C — "Ajustes posteriores" ANTES de "Cobertura firmada" (el layout del B26.md real): el greedy
+  //     se tragaba la cobertura y auto-acusaba TODO → ceguera total.
+  { const d = mkProy('firma-orden'); w(d, 'src/a.tsx', 'const BORNE = 34;\n'); const h = hashArchivo(d, 'src/a.tsx');
+    w(d, 'docs/_cobertura/B32.md', `# B32\n\n**Fecha de cierre:** 2026-07-20\n\n## Ajustes posteriores\n(ninguno)\n\n## Cobertura firmada\n- src/a.tsx: ${h}\n`);
+    w(d, 'docs/_cobertura/B33.md', ficha('B33', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    w(d, 'src/a.tsx', 'const BORNE = 27;\n');
+    check('ficha-firma C: "Ajustes" antes de "Cobertura" + drift sin acuse → MUERDE (antes: ciego total)', verificar(d).length === 1); }
+
+  // D — ruta con backslashes (Windows): firmar() reportaba "1 firmado" pero NO firmaba (0 reemplazos).
+  { const d = mkProy('firma-backslash'); w(d, 'src/a.tsx', 'const BORNE = 34;\n');
+    w(d, 'docs/_cobertura/B34.md', `# B34\n\n**Fecha de cierre:** 2026-07-20\n\n## Cobertura firmada\n- src\\a.tsx\n\n## Ajustes posteriores\n(ninguno)\n`);
+    w(d, 'docs/_cobertura/B35.md', ficha('B35', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    firmar(d, 'docs/_cobertura/B34.md');
+    check('ficha-firma D: firmar() firma DE VERDAD una ruta con backslashes (no miente "firmado")',
+      /src\\a\.tsx:\s*[a-f0-9]{6,}/.test(fs.readFileSync(path.join(d, 'docs/_cobertura/B34.md'), 'utf8')));
+    w(d, 'src/a.tsx', 'const BORNE = 27;\n');
+    check('ficha-firma D: y el drift de esa ruta → MUERDE', verificar(d).length === 1); }
+
+  // B — colisión de basename: acusar un page.tsx tapaba el drift de otro page.tsx en otra carpeta.
+  { const d = mkProy('firma-basename');
+    fs.mkdirSync(path.join(d, 'src/app/facturas'), { recursive: true }); fs.mkdirSync(path.join(d, 'src/app/pagos'), { recursive: true });
+    w(d, 'src/app/facturas/page.tsx', 'const A = 34;\n'); w(d, 'src/app/pagos/page.tsx', 'const B = 1;\n');
+    const hf = hashArchivo(d, 'src/app/facturas/page.tsx'), hp = hashArchivo(d, 'src/app/pagos/page.tsx');
+    w(d, 'docs/_cobertura/B36.md', `# B36\n\n**Fecha de cierre:** 2026-07-20\n\n## Cobertura firmada\n- src/app/facturas/page.tsx: ${hf}\n- src/app/pagos/page.tsx: ${hp}\n\n## Ajustes posteriores\n- 2026-07-31: ajuste en src/app/pagos/page.tsx (pulido).\n`);
+    w(d, 'docs/_cobertura/B37.md', ficha('B37', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    w(d, 'src/app/facturas/page.tsx', 'const A = 27;\n'); // facturas cambió y NO está acusado (sólo pagos)
+    const dr = verificar(d);
+    check('ficha-firma B: acusar pagos/page.tsx NO tapa el drift de facturas/page.tsx → MUERDE el no-acusado',
+      dr.length === 1 && dr[0].archivo === 'src/app/facturas/page.tsx'); }
+
+  // E — firmar() firmaba la 1ª ocurrencia (fuera de la sección) y se comía la línea en blanco.
+  { const d = mkProy('firma-seccion'); w(d, 'src/a.tsx', 'const BORNE = 34;\n');
+    w(d, 'docs/_cobertura/B38.md', `# B38\n\n**Fecha de cierre:** 2026-07-20\n\n## Qué revisar\n- src/a.tsx\n\n## Cobertura firmada\n- src/a.tsx\n\n## Ajustes posteriores\n(ninguno)\n`);
+    w(d, 'docs/_cobertura/B39.md', ficha('B39', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    firmar(d, 'docs/_cobertura/B38.md');
+    const t = fs.readFileSync(path.join(d, 'docs/_cobertura/B38.md'), 'utf8');
+    check('ficha-firma E: firma la línea de "Cobertura" (no la previa) y preserva la línea en blanco',
+      /## Cobertura firmada\n- src\/a\.tsx: [a-f0-9]{6,}\n\n## Ajustes posteriores/.test(t) && /## Qué revisar\n- src\/a\.tsx\n/.test(t));
+    w(d, 'src/a.tsx', 'const BORNE = 27;\n');
+    check('ficha-firma E: el drift se caza (la firma quedó en la línea correcta)', verificar(d).length === 1); }
+
+  // CRLF (Windows): firmar reescribe la línea firmada SIN comerse el \r\n de un fichero CRLF.
+  { const d = mkProy('firma-crlf'); w(d, 'src/a.tsx', 'const BORNE = 34;\n');
+    w(d, 'docs/_cobertura/B40.md', `# B40\r\n\r\n**Fecha de cierre:** 2026-07-20\r\n\r\n## Cobertura firmada\r\n- src/a.tsx\r\n\r\n## Ajustes posteriores\r\n(ninguno)\r\n`);
+    w(d, 'docs/_cobertura/B41.md', ficha('B41', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    firmar(d, 'docs/_cobertura/B40.md');
+    check('ficha-firma CRLF: firmar preserva \\r\\n en la línea firmada (no mezcla finales)',
+      /- src\/a\.tsx: [a-f0-9]{6,}\r\n/.test(fs.readFileSync(path.join(d, 'docs/_cobertura/B40.md'), 'utf8'))); }
+
+  // ── REGRESIONES DEL 2º RED-TEAM (2026-08-03): bordes de parsing; la raíz común se mató con una
+  //    sola definición de ruta ([^\s:]+), una de fin-de-sección (seccion()) y acuse por token. ──
+  // RT2-1 — ruta con acento/ñ (español): el token debe admitir no-ASCII, no descartar en silencio.
+  { const d = mkProy('firma-acento'); w(d, 'src/página.tsx', 'const BORNE = 34;\n');
+    w(d, 'docs/_cobertura/B42.md', ficha('B42', '2026-07-20', 'src/página.tsx', hashArchivo(d, 'src/página.tsx')));
+    w(d, 'docs/_cobertura/B43.md', ficha('B43', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    w(d, 'src/página.tsx', 'const BORNE = 27;\n');
+    check('ficha-firma RT2-1: ruta con acento (src/página.tsx) drift → MUERDE (antes: token ASCII la tiraba)', verificar(d).length === 1); }
+
+  // Border '---' — firmar y parseCobertura comparten seccion(): un archivo tras '----' se firma Y se ve.
+  { const d = mkProy('firma-hr'); w(d, 'src/a.tsx', 'x\n'); w(d, 'src/b.tsx', 'const X = 1;\n');
+    w(d, 'docs/_cobertura/B44.md', `# B44\n\n**Fecha de cierre:** 2026-07-20\n\n## Cobertura firmada\n- src/a.tsx\n----\n- src/b.tsx\n\n## Ajustes posteriores\n(ninguno)\n`);
+    w(d, 'docs/_cobertura/B45.md', ficha('B45', '2026-07-25', 'src/c.tsx', 'deadbeef1234'));
+    firmar(d, 'docs/_cobertura/B44.md');
+    w(d, 'src/b.tsx', 'const X = 2;\n'); // b está DESPUÉS del '----'
+    check('ficha-firma border---: archivo tras "----" se firma Y verificar lo ve → MUERDE (antes: firmado-invisible)', verificar(d).length === 1); }
+
+  // RT2-2 — acuse por token exacto: acusar 'admin/app/card.tsx' NO tapa el drift de 'app/card.tsx' (sufijo).
+  { const d = mkProy('firma-sufijo'); fs.mkdirSync(path.join(d, 'app'), { recursive: true }); fs.mkdirSync(path.join(d, 'admin/app'), { recursive: true });
+    w(d, 'app/card.tsx', 'const A = 34;\n'); w(d, 'admin/app/card.tsx', 'const B = 1;\n');
+    w(d, 'docs/_cobertura/B46.md', `# B46\n\n**Fecha de cierre:** 2026-07-20\n\n## Cobertura firmada\n- app/card.tsx: ${hashArchivo(d, 'app/card.tsx')}\n- admin/app/card.tsx: ${hashArchivo(d, 'admin/app/card.tsx')}\n\n## Ajustes posteriores\n- 2026-07-31: pulido en admin/app/card.tsx.\n`);
+    w(d, 'docs/_cobertura/B47.md', ficha('B47', '2026-07-25', 'src/z.tsx', 'deadbeef1234'));
+    w(d, 'app/card.tsx', 'const A = 27;\n'); // el CORTO cambió y NO está acusado
+    const dr = verificar(d);
+    check('ficha-firma RT2-2: acusar admin/app/card.tsx NO absuelve app/card.tsx → MUERDE el sufijo', dr.length === 1 && dr[0].archivo === 'app/card.tsx'); }
+
+  // F1 './' — acuse con la ruta pelada reconoce la cobertura declarada con './'.
+  { const d = mkProy('firma-punto'); w(d, 'src/a.tsx', 'const BORNE = 34;\n');
+    w(d, 'docs/_cobertura/B48.md', `# B48\n\n**Fecha de cierre:** 2026-07-20\n\n## Cobertura firmada\n- ./src/a.tsx: ${hashArchivo(d, './src/a.tsx')}\n\n## Ajustes posteriores\n- 2026-07-31: pulí src/a.tsx a 27.\n`);
+    w(d, 'docs/_cobertura/B49.md', ficha('B49', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    w(d, 'src/a.tsx', 'const BORNE = 27;\n');
+    check('ficha-firma F1: cobertura "./src/a.tsx" + acuse "src/a.tsx" → limpio (normaliza ./)', verificar(d).length === 0); }
+
+  // NH bounding — un acuse bajo un sub-heading '###' dentro de Ajustes SÍ se reconoce (corta en ##, no ###).
+  { const d = mkProy('firma-subhead'); w(d, 'src/a.tsx', 'const BORNE = 34;\n');
+    w(d, 'docs/_cobertura/B50.md', `# B50\n\n**Fecha de cierre:** 2026-07-20\n\n## Cobertura firmada\n- src/a.tsx: ${hashArchivo(d, 'src/a.tsx')}\n\n## Ajustes posteriores\n### 2026-07-31\n- pulí src/a.tsx a 27.\n`);
+    w(d, 'docs/_cobertura/B51.md', ficha('B51', '2026-07-25', 'src/b.tsx', 'deadbeef1234'));
+    w(d, 'src/a.tsx', 'const BORNE = 27;\n');
+    check('ficha-firma NH: acuse bajo "### fecha" dentro de Ajustes → limpio (corta en ##, no ###)', verificar(d).length === 0); }
 }
 
 // ── C40 · raw-links: frescura documental (enlaces rotos + rango de ley declarado) ────────────────
