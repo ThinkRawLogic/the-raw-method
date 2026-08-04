@@ -147,7 +147,9 @@ function gitCommit(dir, msg) { spawnSync('git', ['-c', 'user.email=a@b.c', '-c',
   check('session: el reflejo trae LA CADENA DE UNA AFIRMACIÓN (existencia→dirección→magnitud)',
     /CADENA DE UNA AFIRMACI/.test(out) && /existencia\s*→\s*direcci/i.test(out));
   check('session: el reflejo trae la estampa de medición (medido: <resultado>, <fecha>)',
-    /medido:\s*<resultado>,\s*<fecha>/.test(out)); }
+    /medido:\s*<resultado>,\s*<fecha>/.test(out));
+  check('session: el reflejo INSTRUYE abrir con el banner Raw Logic (no depende del render del cliente)',
+    /PRIMERA respuesta/.test(out) && /Raw Logic \| A thinking venture/.test(out)); }
 { const d = con('bom', fichaConClaveMuda(true));
   const payload = "\uFEFF" + JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'git commit -m x' }, cwd: d });
   check('gate: payload con BOM (Windows) → BLOQUEA', spawnSync('node', [GATE], { input: payload, encoding: 'utf8' }).status === 2); }

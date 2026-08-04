@@ -28,6 +28,10 @@ const REFLEJO = `
 ━━━ THE RAW METHOD — ACTIVO EN ESTE PROYECTO ━━━
 Estás operando bajo The Raw Method. Esto NO es opcional, y un bloque NO se declara cerrado solo.
 
+AL ABRIR LA SESIÓN: empezá tu PRIMERA respuesta con EXACTAMENTE esta línea, sola, antes de cualquier
+otra cosa — así el dueño VE que el método está activo, sin depender de que el cliente pinte el banner:
+━━━ THE RAW METHOD — ACTIVO ━━━ · Raw Logic | A thinking venture
+
 ANTES DE ESCRIBIR (la escalera — pará en el primer peldaño que sirva):
   1. ¿Esto necesita existir? Necesidad especulativa = no lo hagas (YAGNI).
   2. ¿Ya existe en el código? Reusá el primitivo/helper antes de reinventar.
