@@ -38,6 +38,49 @@ El hook solo ve los commits que hace la IA vía Claude Code. El Nivel 2 cubre el
 con una ficha cerrada sin resolver **no se puede mergear**. (Ajustes → Branches → Add rule →
 Require status checks to pass.)
 
+> ⚠️ **Si no podés activarla, no es que lo hiciste mal.** En repos **privados de una organización
+> con plan free**, GitHub no ofrece branch protection: la API contesta `403 — Upgrade to GitHub Pro
+> or make this repository public`. Pasó en la propia flota de Raw Logic. Ojo con el consejo suelto
+> de "comprá Pro": **Pro es un plan de cuenta personal y no habilita nada en los repos de una
+> organización** — lo que aplica ahí es **Team**. Mientras tanto, el fallback es local y gratis: el
+> **guard de rama** de `candados/pre-commit.sample` (ver *convivencia*, abajo). No son
+> equivalentes y conviene saber por qué: el guard avisa **antes** de escribir el commit, funciona
+> sin internet y se puede saltar (`--no-verify`); branch protection **no se puede saltar**, pero
+> recién actúa al pushear. Son complementarios — declararlo es más honesto que fingir que uno
+> reemplaza al otro.
+
+---
+
+## Convivencia — que dos personas (o dos proyectos) no se pisen
+
+Los tres niveles de arriba responden *"¿se está siguiendo el método?"*. Esta capa responde otra
+pregunta, que el método no cubría: **¿pueden dos personas —o dos proyectos en la misma máquina—
+convivir sin romperse el trabajo?** Sale de hallazgos reales de la flota, no de teoría.
+
+| Pieza | Dónde vive | Qué cierra |
+|---|---|---|
+| **Guard de rama** | `candados/pre-commit.sample` (opt-in: `touch .raw-rama-obligatoria`) | Con dos personas, la rama compartida es el punto de choque: el primero sube y el segundo rebota. En rama propia no pasa. Duerme si trabajás solo — una regla que estorba se arranca, y arrancada no protege a nadie. |
+| **Respaldo con diagnóstico** | `candados/post-commit.sample` | Guardar y respaldar son **un solo acto**: cada commit se sube al instante. Y cuando no puede, dice **por qué**. |
+| **Un puerto y una base por proyecto** | candado propio de cada proyecto (📖→🤖) | Dos instancias del mismo producto en una máquina peleando el puerto no fallan ruidosamente: la segunda toma otro y mirás el proyecto equivocado, que se ve idéntico. |
+
+**El principio que vale aunque no copies un solo hook:**
+
+> **Un aviso que nombra la causa equivocada es peor que no avisar.**
+
+El respaldo decía *"(¿sin internet?)"* ante **cualquier** push fallido. Con una persona era casi
+siempre cierto; con dos es falso —el remoto rechaza por divergencia, no por red— y manda a revisar
+el wifi mientras el respaldo **no ocurre**. Aplica a todo mensaje de error, toda alarma y todo
+candado que escribas: si el diagnóstico miente, el usuario resuelve el problema equivocado **con
+confianza** y el real sigue abierto. Es el pilar de honestidad aplicado a las herramientas, no sólo
+al producto. Corolario práctico: **la causa se averigua preguntándole al sistema, no leyendo el
+texto del error** — ese texto cambia con el idioma y la versión, y leerlo es medir por la forma en
+vez de por el contenido.
+
+Lo reparte `raw-adopcion` (`convivencia-guard-rama`, `convivencia-respaldo`). Las dos son
+`auto:false` a propósito —tocan el hook propio del proyecto y su comportamiento de push— y las dos
+**sólo se reportan si el repo tiene 2+ committers**, medido en el historial: por realidad, no por
+una bandera que alguien tiene que acordarse de poner.
+
 > `raw-cobertura.js` es la lógica compartida por el hook y el CLI — una sola verdad del parser de
 > fichas. Derivar, no duplicar (el propio pilar de datos del método).
 

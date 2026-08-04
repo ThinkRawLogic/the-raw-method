@@ -14,8 +14,73 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
+
+/**
+ * CONVIVENCIA — helpers compartidos por las adopciones de trabajo en equipo.
+ * El método cubría "¿el código rompe una regla?" y "¿se está siguiendo el método?".
+ * Faltaba la tercera: "¿pueden dos personas —o dos proyectos— convivir sin pisarse?".
+ */
+
+/** Cuántas personas distintas commitearon. Se mide por REALIDAD (el historial), no por
+ *  una bandera que alguien tiene que acordarse de poner. 0 si no es repo o no hay git. */
+function committers(dir) {
+  try {
+    const out = execFileSync('git', ['log', '--all', '--format=%ae'], {
+      cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000,
+    });
+    return new Set(out.split('\n').map((s) => s.trim().toLowerCase()).filter(Boolean)).size;
+  } catch (_) { return 0; }
+}
+
+/** El hook VIVO (el que git ejecuta), no el .sample. Busca en husky y en .git/hooks. */
+function hookVivo(dir, nombre) {
+  for (const p of [path.join('.husky', nombre), path.join('.git', 'hooks', nombre)]) {
+    const f = path.join(dir, p);
+    try { if (fs.existsSync(f) && fs.statSync(f).isFile()) return f; } catch (_) {}
+  }
+  return null;
+}
+
+function leer(f) { try { return fs.readFileSync(f, 'utf8'); } catch (_) { return ''; } }
 
 const ADOPCIONES = [
+  {
+    id: 'convivencia-guard-rama',
+    desde: '2026.08.03',
+    titulo: 'El pre-commit frena los commits en la rama compartida cuando el repo tiene más de una persona',
+    auto: false, // toca el hook propio del proyecto (que trae sus gates) → OK del dueño
+    // Sólo se enciende si el repo TIENE dos o más committers. A un proyecto de una sola
+    // persona no se le dice nada: bloquearle `main` sería fricción, no protección.
+    detectar(dir) {
+      if (committers(dir) < 2) return false;
+      const hook = hookVivo(dir, 'pre-commit');
+      if (!hook) return false; // sin pre-commit cableado, primero va el kit base de candados/
+      if (fs.existsSync(path.join(dir, '.raw-rama-obligatoria'))) return false; // ya opt-in
+      return !/COMMIT_EN_MAIN/.test(leer(hook));
+    },
+    instruccion:
+      'El repo tiene 2+ personas y la rama compartida sigue sin candado. Pegá el bloque "GUARD DE RAMA" ' +
+      'de candados/pre-commit.sample al principio de tu pre-commit (ANTES de los gates: tiene que fallar ' +
+      'en milisegundos, no después de la suite) y encendelo con  touch .raw-rama-obligatoria. ' +
+      'Salida deliberada para el caso legítimo:  COMMIT_EN_MAIN=1 git commit.',
+  },
+  {
+    id: 'convivencia-respaldo',
+    desde: '2026.08.03',
+    titulo: 'El post-commit respalda cada commit y, cuando no puede, DICE POR QUÉ (red ≠ rama divergida)',
+    auto: false, // instalar un push automático es una decisión de comportamiento, no un retoque
+    detectar(dir) {
+      if (committers(dir) < 2) return false;      // con una persona el aviso viejo no miente
+      const hook = hookVivo(dir, 'post-commit');
+      if (!hook) return true;                     // equipo y sin respaldo → falta entero
+      return !/ls-remote/.test(leer(hook));       // lo tiene, pero sin diagnosticar la causa
+    },
+    instruccion:
+      'Cableá candados/post-commit.sample (a .husky/post-commit, para que lo reciba todo el que clona). ' +
+      'Si ya tenías un post-commit que sólo pushea: el nuevo distingue "sin red" de "la rama divergió" — ' +
+      'un aviso que nombra la causa equivocada manda a revisar el wifi mientras el respaldo no ocurre.',
+  },
   {
     id: 'reflejo-cadena-afirmacion',
     desde: '2026.08.03',

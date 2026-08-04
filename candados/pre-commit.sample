@@ -40,6 +40,61 @@
 # un proyecto en equipo, la Opción B es la que garantiza que TODOS tengan el portero.
 #
 # ---------------------------------------------------------------------------
+# GUARD DE RAMA — sólo para repos con MÁS DE UNA PERSONA (opt-in)
+# ---------------------------------------------------------------------------
+# Duerme salvo que exista el archivo `.raw-rama-obligatoria` en la raíz del repo.
+# Es deliberado: a alguien que trabaja SOLO, bloquearle `main` es fricción y no
+# protección — y una regla que estorba se arranca, y arrancada no protege a nadie.
+#
+# Encendelo cuando el repo tenga dos committers:   touch .raw-rama-obligatoria
+#
+# QUÉ RESUELVE. Con una sola persona, commitear en `main` no molesta. Con dos,
+# `main` compartida es el punto de choque: el primero sube, el segundo rebota. En
+# una rama propia eso no puede pasar, y el respaldo automático (post-commit.sample)
+# vuelve a ser lo que fue diseñado — respalda LO TUYO, sin chocar con nadie.
+#
+# Va PRIMERO, antes de los candados: enterarte de que estabas en `main` DESPUÉS de
+# esperar la suite entera es un castigo, no un aviso. Esto falla en milisegundos.
+RAIZ="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -n "$RAIZ" ] && [ -f "$RAIZ/.raw-rama-obligatoria" ]; then
+  # `symbolic-ref` y NO `rev-parse --abbrev-ref`: este último necesita que HEAD apunte
+  # a un commit existente, así que en una rama todavía SIN commits devuelve error en
+  # vez del nombre — y el guard se abría solo. Fallar ABIERTO es el peor modo; lo cazó
+  # la prueba del repo recién creado, no el razonamiento.
+  RAMA="$(git symbolic-ref --short HEAD 2>/dev/null)"
+  GIT_DIR_="$(git rev-parse --git-dir)"
+
+  # Una fusión, un cherry-pick, un revert o un rebase EN CURSO commitean sobre la rama
+  # protegida de forma LEGÍTIMA: así aterriza un PR, y `git pull --rebase` es justo lo
+  # que el post-commit manda a hacer cuando la rama divergió. Bloquearlos convertiría
+  # el guard en un callejón sin salida.
+  if [ -f "$GIT_DIR_/MERGE_HEAD" ] || [ -f "$GIT_DIR_/CHERRY_PICK_HEAD" ] || [ -f "$GIT_DIR_/REVERT_HEAD" ] || [ -d "$GIT_DIR_/rebase-merge" ] || [ -d "$GIT_DIR_/rebase-apply" ]; then
+    EN_OPERACION=1
+  else
+    EN_OPERACION=0
+  fi
+
+  if { [ "$RAMA" = "main" ] || [ "$RAMA" = "master" ]; } && [ "$EN_OPERACION" -eq 0 ] && [ -z "$COMMIT_EN_MAIN" ]; then
+    echo ""
+    echo "🚫 Estás por commitear en '$RAMA'. Acá se trabaja en RAMA."
+    echo ""
+    echo "   Con más de una persona, la rama compartida es el punto de choque: el"
+    echo "   primero en subir gana y el segundo rebota. En tu propia rama no pasa."
+    echo ""
+    echo "   👉 Llevate a una rama nueva lo que ya tenés armado (no perdés nada):"
+    echo "        git switch -c mejora/lo-que-estas-haciendo"
+    echo "        git commit ..."
+    echo ""
+    echo "   Y cuando esté listo:  git push -u origin <rama>  →  PR  →  decide el CI."
+    echo ""
+    echo "   Si de verdad va en '$RAMA' (sesión en solitario, arreglo urgente), decilo a propósito:"
+    echo "        COMMIT_EN_MAIN=1 git commit ..."
+    echo ""
+    exit 1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # LO QUE CORRE
 # ---------------------------------------------------------------------------
 

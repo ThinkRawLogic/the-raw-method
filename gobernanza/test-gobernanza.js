@@ -358,6 +358,50 @@ function correr(script, dir) { const r = spawnSync('node', [script, dir], { enco
   const d3 = tmpProyecto('adopt-none');
   check('adopción: proyecto que no usa fichas → sin pendientes (no molesta)', revisar(d3).pendientes.length === 0); }
 
+// CONVIVENCIA: las adopciones de trabajo en equipo. Lo que más importa probar no es que
+// se enciendan, sino que NO molesten a quien trabaja solo — una regla que estorba se arranca.
+{ const { revisar } = require('./raw-adopcion');
+  const pend = (d, id) => revisar(d).pendientes.some((p) => p.id === id);
+  // Repo con N personas distintas en el historial y, opcionalmente, un pre/post-commit vivo.
+  const repo = (suf, autores, hooks) => {
+    const d = tmpProyecto(suf);
+    spawnSync('git', ['init', '-q', '-b', 'main', '.'], { cwd: d });
+    autores.forEach((mail, i) => {
+      fs.writeFileSync(path.join(d, `f${i}.txt`), String(i));
+      spawnSync('git', ['add', '-A'], { cwd: d });
+      spawnSync('git', ['-c', `user.email=${mail}`, '-c', 'user.name=x', 'commit', '-q', '--no-verify', '-m', `c${i}`], { cwd: d });
+    });
+    for (const [nombre, cuerpo] of Object.entries(hooks || {})) {
+      fs.mkdirSync(path.join(d, '.husky'), { recursive: true });
+      fs.writeFileSync(path.join(d, '.husky', nombre), cuerpo);
+    }
+    return d;
+  };
+  const SOLO = ['uno@x.com'], DOS = ['uno@x.com', 'dos@x.com'];
+
+  const s = repo('conv-solo', SOLO, { 'pre-commit': 'npm test\n' });
+  check('convivencia: repo de UNA persona → NO pide el guard de rama (no molesta al que trabaja solo)',
+    !pend(s, 'convivencia-guard-rama') && !pend(s, 'convivencia-respaldo'));
+
+  const e = repo('conv-equipo', DOS, { 'pre-commit': 'npm test\n' });
+  check('convivencia: repo de DOS personas con pre-commit sin guard → lo pide',
+    pend(e, 'convivencia-guard-rama'));
+  check('convivencia: repo de DOS personas sin post-commit → pide el respaldo',
+    pend(e, 'convivencia-respaldo'));
+
+  const y = repo('conv-ya', DOS, { 'pre-commit': 'COMMIT_EN_MAIN guard\n', 'post-commit': 'git ls-remote origin\n' });
+  check('convivencia: si ya los tiene cableados → no vuelve a pedirlos (idempotente)',
+    !pend(y, 'convivencia-guard-rama') && !pend(y, 'convivencia-respaldo'));
+
+  const o = repo('conv-optin', DOS, { 'pre-commit': 'npm test\n' });
+  fs.writeFileSync(path.join(o, '.raw-rama-obligatoria'), '');
+  check('convivencia: con .raw-rama-obligatoria puesto → el guard ya no se pide',
+    !pend(o, 'convivencia-guard-rama'));
+
+  const n = tmpProyecto('conv-norepo');
+  check('convivencia: carpeta que no es repo git → sin pendientes (falla cerrado, no inventa)',
+    !pend(n, 'convivencia-guard-rama') && !pend(n, 'convivencia-respaldo')); }
+
 // ===== REGRESIONES RONDA 2 (lo que la re-auditoría rompió, ahora cerrado) =====
 { const d = tmpProyecto('sec-ex-comment'); fs.writeFileSync(path.join(d, 'f.js'), 'const DB = "postgres://admin:' + 'R3alPr0dP4ss@prod-db.company.io:5432/main"; // example usage\n');
   check('C10 r2: secreto real + comentario "example" → BLOQUEA (allowlist mira el match, no la línea)', correr(SECRETS, d).code === 1); }

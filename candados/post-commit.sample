@@ -1,0 +1,85 @@
+#!/bin/sh
+#
+# post-commit.sample — el candado de RESPALDO: guardar y respaldar son UN SOLO acto
+# =================================================================================
+#
+# Parte de The Raw Method. El `pre-commit` cuida que lo que guardás esté sano. Este
+# cuida otra cosa distinta: que lo que guardaste **exista en otro lado**.
+#
+# QUÉ ES ESTO (para el dueño no-ingeniero)
+# ----------------------------------------
+# `git commit` guarda en TU máquina. Nada más. Que eso llegue a GitHub es un segundo
+# acto —`git push`— que hay que acordarse de hacer. Ese "acordarse" es el agujero: el
+# trabajo de una tarde vive en un solo disco y nadie se entera hasta que se pierde.
+#
+# Este portero cierra los dos actos en uno: cada commit se sube al instante. No
+# reemplaza tu criterio de qué guardar; se ocupa de que lo guardado no viva en un
+# solo lugar.
+#
+# POR QUÉ ADEMÁS DIAGNOSTICA (el hallazgo que lo hizo crecer)
+# ----------------------------------------------------------
+# La primera versión, cuando no podía subir, decía "(¿sin internet?)" y prometía que
+# "se subirá con el próximo commit con red". Con una sola persona eso era casi siempre
+# cierto. Con dos en la misma rama es FALSO: el remoto rechaza el push porque la
+# historia divergió —no por la red—, así que quien lee la terminal se va a revisar el
+# wifi mientras el respaldo sigue sin ocurrir, y el commit siguiente falla igual.
+#
+#   ⟶ Un aviso que nombra la causa equivocada es PEOR que no avisar: manda a resolver
+#     el problema equivocado, con toda confianza, y deja el real abierto. Es el pilar
+#     de honestidad del método aplicado a las herramientas, no sólo al producto.
+#
+# Por eso la causa se AVERIGUA preguntándole al remoto, nunca leyendo el texto del
+# error de git: ese texto cambia con el idioma y la versión, y leerlo sería medir por
+# la FORMA en vez de por el CONTENIDO.
+#
+# CÓMO ACTIVARLO (una sola vez)
+# -----------------------------
+#   OPCIÓN A — a mano:      cp candados/post-commit.sample .git/hooks/post-commit
+#                           chmod +x .git/hooks/post-commit
+#   OPCIÓN B — con husky:   pegá el bloque "LO QUE CORRE" en .husky/post-commit
+#                           (la B es la que garantiza que TODOS los que clonan lo tengan)
+#
+# ---------------------------------------------------------------------------
+# LO QUE CORRE
+# ---------------------------------------------------------------------------
+
+# No auto-pushear en medio de un rebase/merge/cherry-pick: subir a mitad de una
+# secuencia haría muchos push, o un push con force. PERO NO EN SILENCIO — abstenerse
+# sin decirlo deja el commit sin respaldo y nada avisa, que es exactamente el estado
+# que este hook existe para impedir.
+git_dir="$(git rev-parse --git-dir)"
+if [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ] || [ -f "$git_dir/MERGE_HEAD" ] || [ -f "$git_dir/CHERRY_PICK_HEAD" ]; then
+  rama="$(git rev-parse --abbrev-ref HEAD)"
+  echo "⏸️  Respaldo EN PAUSA: estás en medio de un cherry-pick/rebase/merge y este commit NO se subió."
+  echo "    Es a propósito. 👉 Cuando la operación termine, respaldá vos:  git push origin ${rama}"
+  exit 0
+fi
+
+branch="$(git symbolic-ref --short HEAD 2>/dev/null)"
+[ -z "$branch" ] && exit 0                            # HEAD suelto (detached): no pushear
+git remote get-url origin >/dev/null 2>&1 || exit 0   # sin remoto 'origin': nada que respaldar
+
+if salida="$(git push --quiet origin "$branch" 2>&1)"; then
+  echo "🔒 Respaldo: commit subido (origin/$branch) — tu máquina y el remoto, sincronizados."
+elif refs="$(git ls-remote origin "refs/heads/$branch" 2>/dev/null)"; then
+  # Se pudo hablar con el remoto, así que NO es la red. ¿Tiene algo que acá no está?
+  remoto="$(printf '%s\n' "$refs" | cut -f1)"
+  if [ -n "$remoto" ] && ! git merge-base --is-ancestor "$remoto" HEAD 2>/dev/null; then
+    echo "🔀 Respaldo: NO se subió — la rama '$branch' DIVERGIÓ del remoto."
+    echo "    HAY conexión: alguien subió trabajo que vos todavía no tenés."
+    echo "    ⚠️  Esto NO se arregla con el próximo commit — hay que traer lo de arriba primero:"
+    echo "        git pull --rebase origin $branch"
+    echo "        git push origin $branch"
+  else
+    echo "⚠️  Respaldo: NO se subió, y NO fue por red ni por divergencia."
+    echo "    (¿permisos, rama protegida, hook del servidor?) El remoto dijo:"
+    printf '%s\n' "$salida" | sed 's/^/    │ /'
+    echo "    👉 Repetilo a mano para ver el error completo:  git push origin $branch"
+  fi
+else
+  echo "⚠️  Respaldo: NO se subió — no se pudo hablar con el remoto (sin red, o sin credenciales)."
+  echo "    El commit está a salvo en tu máquina; se subirá con el próximo commit con red,"
+  echo "    o subilo a mano:  git push origin $branch"
+fi
+
+exit 0   # el respaldo NUNCA cancela un commit ya hecho: sólo informa.

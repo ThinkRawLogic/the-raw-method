@@ -14,7 +14,8 @@ Si no leíste `referencias/candados-y-capas.md`, léelo primero: acá aplicamos 
 |---|---|
 | `conformance.test.ts` | La implementación de **referencia**. Trae dos candados genéricos del método listos para correr: **cobertura** y **arranque**. Es donde agregas los candados propios de tu proyecto. |
 | `candado-plantilla.ts` | La **plantilla** para escribir un candado nuevo: uno que escanea tu código y hace fallar el commit si **reaparece una clase de bug** que ya arreglaste. |
-| `pre-commit.sample` | El **hook de git** de ejemplo que corre los candados en cada commit. Con instrucciones para activarlo sin ser ingeniero. |
+| `pre-commit.sample` | El **hook de git** de ejemplo que corre los candados en cada commit. Con instrucciones para activarlo sin ser ingeniero. Trae además el **guard de rama** (dormido salvo que crees `.raw-rama-obligatoria`): con dos personas, la rama compartida es el punto de choque. |
+| `post-commit.sample` | El candado de **respaldo**: guardar y respaldar son un solo acto — cada commit se sube al instante. Y cuando no puede, **dice por qué** (sin red ≠ la rama divergió), porque un aviso que nombra la causa equivocada es peor que no avisar. |
 
 ---
 
