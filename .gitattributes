@@ -1,0 +1,27 @@
+# Finales de línea NORMALIZADOS a LF — en el repo y en la COPIA DE TRABAJO.
+#
+# Por qué `eol=lf` y no sólo `text=auto`: `text=auto` ya guarda LF en el repo (medido antes
+# de escribir esto: los 58 archivos versionados están en LF puro, 0 con CRLF). Lo que NO
+# controla es el checkout: con `core.autocrlf=true` —el default de Git para Windows— la copia
+# de trabajo se llena de CRLF al clonar. En un `.md` da igual. En los `.sample` NO: son
+# scripts de shell que el método le pide al dueño copiar a `.git/hooks/`, y un shebang
+# terminado en CR hace que Linux busque el intérprete `/bin/sh\r`, que no existe
+# ("bad interpreter"). Git Bash lo tolera y por eso el problema pasa desapercibido en
+# Windows; `ubuntu-latest` —donde corre el CI de este mismo repo— no.
+#
+# Comprobado en el momento de agregarlo: `candados/pre-commit.sample` ya estaba en disco con
+# CRLF en 123 líneas, mientras `post-commit.sample` estaba en LF. Misma carpeta, dos finales
+# distintos, según si el archivo se acababa de escribir o de sacar del repo. Eso es
+# exactamente la clase de divergencia silenciosa que esta línea cierra.
+#
+# No renormaliza nada al entrar (los blobs ya eran LF): sólo impide que la copia de trabajo
+# se desvíe de acá en adelante.
+* text=auto eol=lf
+
+# Los hooks de ejemplo, explícitos: son EJECUTABLES, no prosa. Que quede escrito para que
+# nadie los tome por documentación y les afloje la regla.
+*.sample text eol=lf
+*.sh     text eol=lf
+
+# No hay reglas de binarios porque el repo no tiene binarios (md, js, ts, json, yml, html).
+# Tampoco hacen falta a futuro: `text=auto` detecta contenido binario y no lo toca.
