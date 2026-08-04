@@ -86,6 +86,15 @@ function fichaV3(cerrada, revision) { // revision: 'ok' | 'vacia' | undefined (f
   const rev = revision === 'ok' ? REVISION_OK : revision === 'vacia' ? REVISION_VACIA : '';
   return '<!-- raw-ficha: v3 -->\n' + base(cerrada, KEYS_OK()) + HONESTO + rev;
 }
+// v4 — disposición de debilidades. `deb` = el CUERPO de la sección Debilidades a probar. La v4 trae
+// también "Qué revisar" (v4 ⊇ v3), así se prueba SÓLO la disposición, no que falte otra cosa.
+function honestoConDeb(deb) {
+  return '\n\n## Reporte honesto (50/50)\n\n### Fortalezas\nquedó sólido el flujo X.\n' +
+    '\n### Debilidades / qué quedó corto o frágil\n' + deb + '\n\n### Qué NO se alcanzó a probar (lo más importante)\ncarga real.\n';
+}
+function fichaV4(cerrada, deb) {
+  return '<!-- raw-ficha: v4 -->\n' + base(cerrada, KEYS_OK()) + honestoConDeb(deb) + REVISION_OK;
+}
 
 function correrGate(command, dir, home) {
   const opts = { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: dir }), encoding: 'utf8' };
@@ -175,6 +184,79 @@ function gitCommit(dir, msg) { spawnSync('git', ['-c', 'user.email=a@b.c', '-c',
 { check('gate: ficha v3 con "qué revisar" VACÍA → BLOQUEADO', correrGate('git commit -m x', con('v3vac', fichaV3(true, 'vacia'))).code === 2); }
 { check('gate: ficha SIN marcador v3 y sin "qué revisar" → PERMITIDO (no rompe v1/v2)', correrGate('git commit -m x', con('nov3', fichaResuelta(true))).code === 0); }
 { check('gate: ficha v3 ABIERTA sin revisión → PERMITIDO (solo al cerrar)', correrGate('git commit -m wip', con('v3open', fichaV3(false))).code === 0); }
+
+// =============== Nivel 3.4 — disposición de debilidades (fichas v4) ==========
+{ const r = correrGate('git commit -m x', con('v4prosa', fichaV4(true, 'falta pulir Y (prosa suelta, sin disposición).')));
+  check('gate: v4 con Debilidades en PROSA (sin disposición) → BLOQUEADO', r.code === 2);
+  check('gate:   · nombra la disposición', /disposici/i.test(r.err)); }
+{ check('gate: v4 con cada debilidad DISPUESTA (objetiva-arreglada + subjetiva-dueño) → PERMITIDO',
+    correrGate('git commit -m x', con('v4ok', fichaV4(true, '- [objetiva-arreglada] el parser tiraba acentos. → fix: commit 8246947\n- [subjetiva-dueño] la UX del botón podría ser más clara.'))).code === 0); }
+{ check('gate: v4 objetiva-arreglada SIN referencia al fix → BLOQUEADO',
+    correrGate('git commit -m x', con('v4nofix', fichaV4(true, '- [objetiva-arreglada] algo que resolví pero no digo dónde.'))).code === 2); }
+{ check('gate: v4 con disposición INVENTADA → BLOQUEADO',
+    correrGate('git commit -m x', con('v4inv', fichaV4(true, '- [medio-arreglada] algo.'))).code === 2); }
+{ check('gate: v4 con una debilidad SIN tag → BLOQUEADO',
+    correrGate('git commit -m x', con('v4notag', fichaV4(true, '- una debilidad sin disposición.'))).code === 2); }
+{ check('gate: v4 con "(ninguna)" → PERMITIDO', correrGate('git commit -m x', con('v4none', fichaV4(true, '(ninguna)'))).code === 0); }
+{ check('gate: ficha v3 (no v4) con Debilidades en prosa → PERMITIDO (disposición es forward-only)',
+    correrGate('git commit -m x', con('v3fwd', fichaV3(true, 'ok'))).code === 0); }
+{ check('gate: v4 ABIERTA con Debilidades en prosa → PERMITIDO (solo al cerrar)',
+    correrGate('git commit -m wip', con('v4open', fichaV4(false, 'prosa suelta'))).code === 0); }
+{ const { problemasDeDisposicion } = require('./raw-cobertura');
+  check('disposición unit: subjetiva-dueño válida → sin problemas',
+    problemasDeDisposicion('## Debilidades\n- [subjetiva-dueño] la copy podría mejorar.\n').length === 0);
+  check('disposición unit: bullet sin tag → 1 problema',
+    problemasDeDisposicion('## Debilidades\n- algo suelto sin disposición.\n').length === 1); }
+
+// ── REGRESIONES del Red Team de disposición (2026-08-04): 6 defectos, cada uno cerrado ──
+{ const { problemasDeDisposicion: pd } = require('./raw-cobertura');
+  const P = (deb) => pd('## Debilidades\n' + deb + '\n\n## Fin\n');
+  const GUIA = '> **Candado v4:** cada debilidad va con su disposición. Si de verdad no hay, escribí `(ninguna)`.\n> - `[objetiva-arreglada]` bug → ref al fix.\n>\n';
+  // F1 — la GUÍA de la plantilla (blockquote con "(ninguna)") NO anula el candado; prosa cuelga:
+  check('disp F1: guía de plantilla + debilidad en prosa → BLOQUEA (ya no es no-op por defecto)',
+    P(GUIA + 'el retry de pago no es idempotente, doble cobro, sin arreglar').length >= 1);
+  check('disp F1: sólo la guía sin llenar (___) → BLOQUEA', P(GUIA + '___').length >= 1);
+  check('disp F1: prosa "no hay debilidades de X pero sí Y" → BLOQUEA (no cuenta como "(ninguna)")',
+    P('no hay debilidades de seguridad, pero el parser pierde acentos y queda sin arreglar').length >= 1);
+  check('disp F1: "(ninguna)" real despojando la guía → PASA', P(GUIA + '(ninguna)').length === 0);
+  // F2 — prosa suelta / lista numerada entre bullets válidos cuelga:
+  check('disp F2: prosa suelta a col-0 tras un bullet dispuesto → BLOQUEA',
+    P('- [objetiva-arreglada] parser, fix commit 8246947\nAdemás el saldo puede quedar negativo, sin resolver').length >= 1);
+  check('disp F2: ítem numerado sin tag → BLOQUEA',
+    P('- [subjetiva-dueño] color feo\n1. el retry no reintenta en timeout (sin disposición)').length >= 1);
+  // F3 — referencia al fix: verbo/subcadena/decimal NO alcanza; puntero real SÍ:
+  check('disp F3: "protesta" (test embebido) en objetiva-arreglada → BLOQUEA',
+    P('- [objetiva-arreglada] esto generaba una protesta del usuario, sin resolver').length >= 1);
+  check('disp F3: "habría que arreglarlo" (futuro) → BLOQUEA',
+    P('- [objetiva-arreglada] habría que arreglarlo más adelante').length >= 1);
+  check('disp F3: decimal de 7 dígitos (no hash) → BLOQUEA',
+    P('- [objetiva-arreglada] el usuario id 1234567 sin resolver').length >= 1);
+  check('disp F3: puntero real (PR URL en el slot →) → PASA',
+    P('- [objetiva-arreglada] parser roto → https://github.com/x/y/pull/128').length === 0);
+  check('disp F3: puntero real (#N en el slot fix:) → PASA', P('- [objetiva-arreglada] parser roto → fix: PR #34').length === 0);
+  // F4 — sub-bullet indentado (continuación) NO es debilidad nueva → sin falso positivo:
+  check('disp F4: sub-bullet indentado bajo una debilidad dispuesta → PASA',
+    P('- [objetiva-arreglada] doble impuesto → fix: commit abc1234f\n  - detalle: antes sumaba dos veces').length === 0);
+  // F5 — tag envuelto en backticks (la plantilla lo modela) → PASA:
+  check('disp F5: disposición en backticks `[subjetiva-dueño]` → PASA',
+    P('- `[subjetiva-dueño]` la UX del botón podría ser más clara').length === 0);
+  // ── REGRESIONES del 2º Red Team de disposición (2026-08-04) ──
+  // A1 — token técnico en la DESCRIPCIÓN no cuenta como referencia (refFix acotado al slot):
+  check('disp A1: "SHA-256 mal calculado, sin resolver" (sin slot →fix:) → BLOQUEA',
+    P('- [objetiva-arreglada] SHA-256 mal calculado, sin resolver').length >= 1);
+  check('disp A1: "UTF-8 roto, pendiente" (token técnico, sin slot) → BLOQUEA',
+    P('- [objetiva-arreglada] el encoding UTF-8 quedó roto, pendiente').length >= 1);
+  check('disp A1: palabra all-hex ("acabada") en el slot → BLOQUEA (hash exige letra Y dígito)',
+    P('- [objetiva-arreglada] la tarea → fix: acabada').length >= 1);
+  // B — R-mislabel: bug de dominio-objetivo tageado subjetivo/diferido → bloqueo-con-acuse:
+  check('disp B: bug de PLATA (doble cobro) tageado [subjetiva-dueño] → BLOQUEA (dominio-objetivo)',
+    P('- [subjetiva-dueño] el retry de pago no es idempotente, doble cobro').length >= 1);
+  check('disp B: mismo bug [diferida-dueño] sin acuse → BLOQUEA',
+    P('- [diferida-dueño] el saldo puede quedar negativo por concurrencia').length >= 1);
+  check('disp B: dominio-objetivo con acuse explícito (dominio-ok) → PASA',
+    P('- [subjetiva-dueño] el color del botón de pago podría ser más claro (dominio-ok: es UI, no la lógica de plata)').length === 0);
+  check('disp B: subjetiva NO-dominio (copy) → PASA sin acuse',
+    P('- [subjetiva-dueño] la redacción del cartel podría ser más clara').length === 0); }
 
 // ============== Nivel 4 — REGRESIONES del red-team adversario ================
 
@@ -407,24 +489,34 @@ function correr(script, dir) { const r = spawnSync('node', [script, dir], { enco
   check('adopción B (regex): versionMotor acepta guion/ISO y +build (no devuelve null)',
     versionMotor("const MOTOR_VERSION = '2026-08-04';") === '2026-08-04' && versionMotor("const MOTOR_VERSION = '1.0+x';") === '1.0+x'); }
 
+// disposición-v4: plantilla por debajo de v4 → reporta adoptar (auto:false); plantilla v4 → al día.
+{ const { revisar } = require('./raw-adopcion');
+  const dv3 = tmpProyecto('disp-v3'); fs.mkdirSync(path.join(dv3, 'docs', '_cobertura'), { recursive: true });
+  fs.writeFileSync(path.join(dv3, 'docs', '_cobertura', '_PLANTILLA.md'), '<!-- raw-ficha: v3 -->\n# Ficha\n');
+  check('adopción disp-v4: plantilla v3 → reporta subir a v4 (auto:false, OK dueño)',
+    revisar(dv3).pendientes.some((p) => p.id === 'disposicion-v4-plantilla' && p.auto === false));
+  const dv4 = tmpProyecto('disp-v4'); fs.mkdirSync(path.join(dv4, 'docs', '_cobertura'), { recursive: true });
+  fs.writeFileSync(path.join(dv4, 'docs', '_cobertura', '_PLANTILLA.md'), '<!-- raw-ficha: v4 -->\n# Ficha\n');
+  check('adopción disp-v4: plantilla v4 → NO se marca (al día)',
+    !revisar(dv4).pendientes.some((p) => p.id === 'disposicion-v4-plantilla')); }
+
 // GUARD del sello: si el motor cambia y MOTOR_VERSION no, la adopción propagaría mintiendo "están al día".
 // Este test lo impide: fija el hash de la LÓGICA (motor sin la línea del sello) + la versión; tocar el
 // motor rompe el hash → hay que subir MOTOR_VERSION y actualizar SELLO acá. Convierte el "no me olvido
 // de versionar" en candado, no en disciplina.
 { const crypto = require('crypto');
-  const { versionMotor } = require('./adopciones'); // MISMO extractor que gobierna la propagación (no divergir: F2)
+  const { versionMotor } = require('./adopciones'); // MISMO extractor que gobierna la propagación
   const src = fs.readFileSync(path.join(HERE, 'raw-ficha-firma.js'), 'utf8');
-  const selloMotor = versionMotor(src);
+  const sello = versionMotor(src) || '';
   const logica = src.replace(/^\s*const\s+MOTOR_VERSION\s*=\s*['"][\w.+-]+['"];?.*$/m, '');
-  const logicHash = crypto.createHash('sha256').update(logica).digest('hex').slice(0, 12);
-  const SELLO = { version: '2026.08.04', hash: '59fc5123ccbf' };
-  check('motor-version: el motor lleva sello MOTOR_VERSION', !!selloMotor);
-  check('motor-version: el sello del motor coincide con el SELLO del test', selloMotor === SELLO.version);
-  // Residuo declarado: esto obliga a TOCAR el sello, pero un dev que actualiza sólo el hash y NO la
-  // versión burla la propagación. El fix pleno (versión derivada del hash) re-propaga todo → se hará
-  // cuando el motor cambie de verdad. Por ahora el mensaje lo deja explícito.
-  check('motor-version: si cambiás la LÓGICA del motor → SUBÍ MOTOR_VERSION (no sólo este hash) y el SELLO acá',
-    logicHash === SELLO.hash); }
+  const logicHash = crypto.createHash('sha256').update(logica).digest('hex').slice(0, 8);
+  // R-guard cerrado (Red Team 2026-08-04): el sufijo +<hash> de MOTOR_VERSION ES el hash de la lógica,
+  // y el sufijo es lo que la adopción compara. Cambiar el motor cambia el hash → única forma de volver
+  // al verde: poner el sufijo nuevo = re-propagar. No se puede "quedar en verde tocando otra cosa" (el
+  // incentivo invertido que subestimé). No hay un SELLO manual aparte que se pueda actualizar solo.
+  check('motor-version: MOTOR_VERSION lleva el sufijo +<hash de la lógica>', /\+[0-9a-f]{8}$/.test(sello));
+  check('motor-version: el sufijo COINCIDE con el hash de la lógica (cambiar el motor lo fuerza, no es opcional)',
+    sello.split('+')[1] === logicHash); }
 
 // CONVIVENCIA: las adopciones de trabajo en equipo. Lo que más importa probar no es que
 // se enciendan, sino que NO molesten a quien trabaja solo — una regla que estorba se arranca.

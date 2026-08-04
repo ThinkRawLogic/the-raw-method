@@ -27,10 +27,12 @@ const path = require('path');
 const crypto = require('crypto');
 
 // Sello del motor: la adopción (adopciones.js) lo usa para saber si la copia .cjs de un proyecto
-// quedó vieja y hay que re-propagarla. SUBILO cada vez que cambie la lógica del motor — el test
-// "motor-version" de test-gobernanza.js FALLA si tocás el motor sin subir el sello (así la
-// propagación nunca cree "están al día" mintiendo).
-const MOTOR_VERSION = '2026.08.04';
+// quedó vieja y hay que re-propagarla. El sufijo tras '+' ES el hash de la lógica del motor, y el
+// test "motor-version" (test-gobernanza.js) EXIGE que coincida: si cambiás la lógica, el hash cambia,
+// el test se pone rojo, y la ÚNICA forma de volver al verde es poner el hash nuevo acá — que es
+// justo el valor que la adopción compara → se re-propaga solo. No hay forma de tocar la lógica sin
+// mover el sello (se cerró el incentivo invertido que dejaba la propagación apagada, Red Team 2026-08-04).
+const MOTOR_VERSION = '2026.08.04+6f5a7d7c';
 
 function hashArchivo(dir, rel) {
   try { return crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, rel))).digest('hex').slice(0, 12); }

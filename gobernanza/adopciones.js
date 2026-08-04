@@ -189,6 +189,29 @@ const ADOPCIONES = [
       'verificar(process.cwd()) a tu conformance.test.ts, y las secciones "Cobertura firmada" + ' +
       '"Ajustes posteriores" a la plantilla de ficha.',
   },
+  {
+    id: 'disposicion-v4-plantilla',
+    desde: '2026.08.04',
+    titulo: 'La plantilla de ficha sube a v4: cada debilidad del cierre lleva su disposición (ninguna queda colgando)',
+    auto: false, // reformatea la sección "Debilidades" de la plantilla (doc del proyecto) → OK del dueño
+    _plantilla(dir) {
+      for (const p of ['docs/_cobertura/_PLANTILLA.md', '_cobertura/_PLANTILLA.md', 'docs/_cobertura/_plantilla.md', 'plantillas/ficha-cobertura.md']) {
+        try { const f = path.join(dir, p); if (fs.existsSync(f)) return f; } catch (_) {}
+      }
+      return null;
+    },
+    detectar(dir) {
+      const f = this._plantilla(dir);
+      if (!f) return false; // no usa fichas → no aplica
+      const m = leer(f).match(/raw-ficha:\s*v(\d+)/i);
+      return !m || parseInt(m[1], 10) < 4; // plantilla por debajo de v4 → falta adoptar
+    },
+    instruccion:
+      'Subí tu plantilla de ficha a v4: cambiá el marcador de arriba a `raw-ficha: v4` y en la sección ' +
+      '"Debilidades" pegá el formato de disposición (cada debilidad un bullet con [objetiva-arreglada] / ' +
+      '[objetiva-irreducible] / [subjetiva-dueño] / [diferida-dueño]) — copialo de plantillas/ficha-cobertura.md ' +
+      'del método. Así ninguna debilidad del cierre queda colgando (el candado central sólo actúa sobre fichas v4).',
+  },
 ];
 
 module.exports = { ADOPCIONES, versionMotor };

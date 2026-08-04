@@ -1,5 +1,5 @@
 # Ficha de cobertura — bloque [Nº / nombre]
-<!-- raw-ficha: v3 -->  <!-- NO borrar: activa el candado del "OK informado" (sección "Qué revisar"). -->
+<!-- raw-ficha: v4 -->  <!-- NO borrar: activa los candados del "OK informado" (Qué revisar) y de la disposición de debilidades. -->
 
 
 > **Plantilla de The Raw Method.** Al CERRAR un bloque de trabajo, copia esta ficha y **resuelve cada clave**:
@@ -60,6 +60,16 @@
 ___
 
 ### Debilidades / qué quedó corto o frágil
+
+> **Candado 🤖 (v4):** ninguna debilidad queda colgando. Cada una va como **bullet con su disposición
+> al frente**. Lo OBJETIVO (hay un hecho) se resuelve; lo SUBJETIVO (juicio de valor) es del DUEÑO y
+> **no se autocorrige** — se le sube. Si de verdad no hay, escribí `(ninguna)`.
+>
+> - `[objetiva-arreglada]` bug / test que miente / invariante roto → **referencia al fix** (commit, PR, test).
+> - `[objetiva-irreducible]` por diseño / tooling / física → **por qué** es irreducible.
+> - `[subjetiva-dueño]` juicio de valor → lo decide el dueño (su OK del bloque lo cubre); NO se toca.
+> - `[diferida-dueño]` el dueño la vio y la **difirió** a propósito → cuándo / por qué.
+
 ___
 
 ### Qué NO se alcanzó a probar (lo más importante)

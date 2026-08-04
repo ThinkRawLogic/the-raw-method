@@ -46,12 +46,18 @@ function esV2(texto) {
          /\*\*Auditó/i.test(texto);
 }
 
-// Una ficha "v3" trae el marcador `raw-ficha: v3` (lo estampa la plantilla nueva) y queda
-// sujeta AL CANDADO DEL OK INFORMADO (3.3). Las v1/v2 no lo traen → no se les exige, así
-// adoptar el cambio no brickea fichas ya cerradas (mismo soft-gate deliberado que esV2).
-function esV3(texto) {
-  return /raw-ficha:\s*v3/i.test(texto || '');
+// El marcador `raw-ficha: vN` (lo estampa la plantilla) es MONOTÓNICO: v4 ⊇ v3 ⊇ … Cada versión
+// activa un candado más, y una versión mayor hereda los de las menores (por eso esV3 acepta v3+).
+// Así adoptar el cambio no brickea fichas ya cerradas (soft-gate deliberado, como esV2).
+function versionFicha(texto) {
+  const m = (texto || '').match(/raw-ficha:\s*v(\d+)/i);
+  return m ? parseInt(m[1], 10) : 0;
 }
+// v3: CANDADO DEL OK INFORMADO (3.3) — la lista "Qué revisar".
+function esV3(texto) { return versionFicha(texto) >= 3; }
+// v4: CANDADO DE DISPOSICIÓN DE DEBILIDADES (3.4) — ninguna debilidad del 50/50 queda colgando:
+// cada una lleva su disposición. Lo objetivo se resuelve; lo subjetivo es del dueño (no se autocorrige).
+function esV4(texto) { return versionFicha(texto) >= 4; }
 
 // C26: una ficha CERRADA en o después de esta fecha NO puede degradarse al formato "legacy"
 // (sin honestidad ni auditor) para esquivar esos candados. Antes de la fecha el grandfathering
@@ -153,6 +159,92 @@ function problemasDeRevision(texto) {
   return out;
 }
 
+// --- Disposición de debilidades (3.4, fichas v4): ninguna debilidad queda colgando -----------
+// La máquina revisa SÓLO el PROCESO y la FRONTERA de quién decide, NUNCA el gusto ("¿esto es una
+// debilidad?" / "¿vale la pena?" es juicio, y disfrazar juicio de candado está prohibido):
+//   · cada debilidad del 50/50 lleva su disposición (ninguna colgando);
+//   · lo OBJETIVO (hay un hecho) se resuelve → `objetiva-arreglada` exige referencia al fix;
+//   · lo SUBJETIVO (juicio de valor) es del DUEÑO → se TAGEA `subjetiva-dueño`, NO se autocorrige;
+//     su aceptación es el OK del bloque (la clave `(OK)`, que ya se exige al cerrar).
+// Residuo declarado: la máquina no detecta si el agente ETIQUETÓ MAL (subjetivo disfrazado de
+// objetivo para justificar tocarlo). Sube el piso; el OK del dueño es la red final.
+const DISPOSICIONES = ['objetiva-arreglada', 'objetiva-irreducible', 'subjetiva-dueño', 'diferida-dueño'];
+// Ángulos OBJETIVOS-POR-DOMINIO (mismo criterio mecánico que el router C3: hay un hecho, no gusto).
+// Si una debilidad en estos ángulos se etiqueta subjetiva/diferida-dueño, es el hueco donde un BUG se
+// disfraza de "juicio del dueño" para no arreglarlo (Red Team 2026-08-04: bug de plata pasaba tageado
+// subjetivo). No JUZGAMOS el gusto: exigimos un acuse explícito "(dominio-ok: …)" para que la decisión
+// sea CONSCIENTE y auditable por el dueño, no un dodge silencioso.
+const OBJETIVO_POR_DOMINIO = /\b(dinero|plata|pago|cobro|saldo|monto|importe|precio|factura|stock|inventario|concurren|at[oó]mic|idempot|race|deadlock|lock|seguridad|permiso|aislam|secreto|inyec|inject|xss|csrf|rls|\bauth)\b/i;
+
+// ¿La descripción de una 'objetiva-arreglada' trae un PUNTERO concreto al fix (no un verbo suelto)?
+// Un verbo NO alcanza: la prosa española lleva 'test' dentro de "protesta"/"testimonio" y 'arregl'
+// dentro de "arreglarlo" (futuro) — aceptarlos dejaba pasar debilidades SIN resolver. Se exige
+// evidencia señalable: hash git (hex con ≥1 letra, para no confundir con un decimal), commit/PR/#N,
+// ticket ABC-123, o una URL de commit/pull.
+function refFix(desc) {
+  // La referencia va en un SLOT designado (tras "fix:" o "→"/"->", como modela la plantilla). Escanear
+  // TODA la descripción por un "puntero" era intrínsecamente fugoso: "SHA-256 mal calculado, sin resolver"
+  // pasaba (el token técnico matcheaba una rama laxa). Acotado al slot: la prosa de la descripción ya no
+  // dispara. Y dentro del slot los hashes exigen letra Y dígito (no "acabada"), y los tickets/PR su
+  // keyword (no "UTF-8"/"ISO-8601"). (Red Team 2026-08-04: A1 tokens técnicos + palabras all-hex.)
+  const m = (desc || '').match(/(?:→|->|\bfix\s*:)\s*(.+)$/i);
+  if (!m) return false;
+  const ref = m[1];
+  return /\bcommit\b[\s:#]*[0-9a-f]{6,}\b/i.test(ref)                   // "commit 8246947"
+      || /\b(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,}\b/i.test(ref) // hash git: 7+ hex CON letra Y dígito
+      || /\b(?:pr|issue|ticket|pull)\b[\s#:]*\d+/i.test(ref)           // PR 12 / issue #34 / ticket 5
+      || /#\d{2,}/.test(ref)                                           // #123 (2+ dígitos, no una enumeración "#3")
+      || /\/(commit|pull|pulls|issues)\//i.test(ref)                   // URL de github
+      || /[\w./-]+\.(test|spec)\.[a-z]+/i.test(ref);                   // ruta a un archivo de test/spec
+}
+
+function problemasDeDisposicion(texto) {
+  const out = [];
+  const m = (texto || '').match(/(^|\n)\s*#{1,6}\s*Debilidades[^\n]*/i);
+  if (!m) return out; // la ausencia de la sección la caza el candado de honestidad (3.1), no éste
+  const rest = (texto || '').slice(m.index + m[0].length);
+  const corte = rest.search(/\n\s*(?:#{1,6}\s|---|\*\*(?:Construy|Audit|Fecha de cierre|Rastro))/i);
+  const cuerpoRaw = corte === -1 ? rest : rest.slice(0, corte);
+  // Fuera la GUÍA (blockquote `>`) y el relleno `___`: es boilerplate de la plantilla, no del autor.
+  // Sin esto la propia guía —que contiene "(ninguna)"— anulaba el candado POR DEFECTO (Red Team 2026-08-04).
+  const lineas = cuerpoRaw.split('\n')
+    .filter((l) => !/^\s*>/.test(l))
+    .map((l) => l.replace(/_{2,}/g, ''))
+    .filter((l) => l.trim().length > 0);
+  const cuerpo = lineas.join('\n').trim();
+  if (!cuerpo) { out.push('la sección "Debilidades" quedó sin llenar (sólo la guía): listá cada debilidad con su disposición, o declará "(ninguna)"'); return out; }
+  // Declaración EXPLÍCITA de ausencia: el cuerpo despojado ES el centinela (anclado ^…$, NO un substring
+  // suelto — antes "no hay debilidades de X pero sí Y" contaba como "(ninguna)" y colgaba la de Y).
+  if (/^\(?\s*(ninguna|sin debilidades|no hay debilidades|n\/a|nada que declarar)\s*\)?[.\s]*$/i.test(cuerpo)) return out;
+  const esItem = (l) => /^[-*+]\s+\S/.test(l) || /^\d+[.)]\s+\S/.test(l); // bullet o lista numerada a COLUMNA 0
+  const items = lineas.filter(esItem);
+  if (items.length === 0) {
+    out.push('las Debilidades van como LISTA: cada una un bullet con su disposición ([objetiva-arreglada]/[objetiva-irreducible]/[subjetiva-dueño]/[diferida-dueño]) — o declará "(ninguna)"');
+    return out;
+  }
+  // Prosa suelta a COLUMNA 0 (no indentada, no ítem): una debilidad escrita fuera del formato → colgaría.
+  // Una línea INDENTADA es continuación/sub-bullet de una debilidad ya dispuesta y NO se marca (evita el
+  // falso positivo del desglose en sub-viñetas).
+  const prosa = lineas.filter((l) => /^\S/.test(l) && !esItem(l));
+  if (prosa.length) out.push(`hay texto suelto en Debilidades, fuera del formato — cada debilidad va como bullet con su [disposición]: "${prosa[0].slice(0, 60)}"`);
+  for (const it of items) {
+    const cuerpoB = it.replace(/^[-*+]\s*/, '').replace(/^\d+[.)]\s*/, '');
+    const mt = cuerpoB.match(/^[`*_\s]*\[\s*([^\]]+?)\s*\]\s*(.*)$/); // tolera backticks/énfasis (la plantilla los modela)
+    if (!mt) { out.push(`debilidad sin disposición: "${cuerpoB.slice(0, 60)}" (poné [objetiva-arreglada]/[objetiva-irreducible]/[subjetiva-dueño]/[diferida-dueño] al inicio)`); continue; }
+    const disp = mt[1].toLowerCase();
+    const desc = (mt[2] || '').replace(/`/g, '').trim();
+    if (!DISPOSICIONES.includes(disp)) { out.push(`disposición inválida "[${mt[1]}]" (usá objetiva-arreglada / objetiva-irreducible / subjetiva-dueño / diferida-dueño)`); continue; }
+    if (desc.replace(/[_*\s]/g, '').length < MIN_CUERPO_HONESTO) { out.push(`la debilidad "[${disp}]" no describe nada (escribí qué es)`); continue; }
+    if (disp === 'objetiva-arreglada' && !refFix(desc)) {
+      out.push(`"[objetiva-arreglada]" necesita una REFERENCIA concreta al fix (commit/PR/#N/ticket/URL — no un verbo suelto): "${desc.slice(0, 50)}"`);
+    }
+    if ((disp === 'subjetiva-dueño' || disp === 'diferida-dueño') && OBJETIVO_POR_DOMINIO.test(desc) && !/dominio-ok/i.test(desc)) {
+      out.push(`la debilidad "[${disp}]" cae en un ángulo OBJETIVO-POR-DOMINIO (dinero/seguridad/concurrencia) pero se marca como juicio del dueño — el hueco donde un bug se disfraza de "gusto". Si de verdad es preferencia y no un defecto, confirmalo con "(dominio-ok: <por qué>)". Si es un bug, arreglalo y usá [objetiva-arreglada].`);
+    }
+  }
+  return out;
+}
+
 // --- Auditoría (3.2): independencia del auditor -----------------------------
 function valorCampo(texto, etiquetaRe) {
   const m = (texto || '').match(etiquetaRe);
@@ -238,11 +330,14 @@ function revisarCobertura(dir, leerFichasFn) {
     if (esV3(f.texto) || fechaFuerzaV2(f)) { // "Qué revisar" obligatoria post-adopción, no solo opt-in por marcador borrable
       for (const p of problemasDeRevision(f.texto)) problemas.push(`${f.archivo}: ${p}`);
     }
+    if (esV4(f.texto)) { // disposición de debilidades: SÓLO fichas v4 (forward-only por marcador; no brickea repos que no adoptaron aún)
+      for (const p of problemasDeDisposicion(f.texto)) problemas.push(`${f.archivo}: ${p}`);
+    }
   }
   return { esMetodo: true, fichas, cerradas, problemas };
 }
 
 module.exports = {
-  CLAVES_CANONICAS, MARCADORES, metodoRoot, isMethodProject, esV2, esV3, parseFicha, esFicha,
-  problemasDeFicha, problemasDeHonestidad, problemasDeRevision, problemasDeAuditoria, leerFichas, revisarCobertura,
+  CLAVES_CANONICAS, MARCADORES, metodoRoot, isMethodProject, esV2, esV3, esV4, versionFicha, parseFicha, esFicha,
+  problemasDeFicha, problemasDeHonestidad, problemasDeRevision, problemasDeDisposicion, problemasDeAuditoria, leerFichas, revisarCobertura,
 };

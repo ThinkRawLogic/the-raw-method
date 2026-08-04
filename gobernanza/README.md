@@ -21,6 +21,13 @@ Lo corre el **harness**, no la IA → la IA no puede decidir no correrlo. **No s
 `--no-verify`** (interceptamos el comando *antes* de git). No necesita vitest ni Node-en-el-proyecto:
 usa el Node de tu máquina. Corre en tu Windows hoy, sobre un proyecto FoxPro/Supabase sin Node.
 
+> **Central (modo A) vs. copia propia (modo B).** Lo normal es apuntar los hooks al `gobernanza/`
+> **central** del método: un solo lugar, y los updates llegan sin re-copiar. Si un proyecto vendora su
+> PROPIA copia de `gobernanza/` (modo B), esa copia **no se actualiza sola**: su guard `motor-version`
+> valida SU propio motor (queda verde aunque el central haya avanzado). Si vas a modo B, sincronizá la
+> copia desde el central y confiá en `raw-adopcion` corrido **contra el central** para detectar la
+> deriva. (Hoy toda la flota usa modo A — el central; por eso este riesgo tiene exposición 0.)
+
 ---
 
 ## Nivel 2 — que muerda sí o sí, aun sin la IA (CLI + CI)
