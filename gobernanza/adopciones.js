@@ -46,7 +46,14 @@ function leer(f) { try { return fs.readFileSync(f, 'utf8'); } catch (_) { return
 
 // Extrae el sello MOTOR_VERSION del texto de un raw-ficha-firma (el motor del skill o la copia .cjs
 // de un proyecto). null si no lo tiene (una copia vieja, previa al sello) → cuenta como desactualizada.
-function versionMotor(texto) { const m = (texto || '').match(/MOTOR_VERSION\s*=\s*['"]([\w.]+)['"]/); return m ? m[1] : null; }
+// ANCLADA a la DECLARACIÓN (const/let/var al inicio de línea) para que un comentario o string que
+// contenga 'MOTOR_VERSION = ...' NO tape el valor real (first-match ciego era un footgun). Char class
+// amplia [\w.+-] por si el sello algún día usa guion/ISO o +build. El guard de test-gobernanza importa
+// ESTA función (no una regex propia) para validar EXACTAMENTE el valor que gobierna la propagación.
+function versionMotor(texto) {
+  const m = (texto || '').match(/^\s*(?:const|let|var)\s+MOTOR_VERSION\s*=\s*['"]([\w.+-]+)['"]/m);
+  return m ? m[1] : null;
+}
 
 const ADOPCIONES = [
   {
@@ -165,7 +172,11 @@ const ADOPCIONES = [
       for (const p of ['docs/_cobertura/_PLANTILLA.md', '_cobertura/_PLANTILLA.md', 'docs/_cobertura/_plantilla.md', 'plantillas/ficha-cobertura.md']) {
         try { if (fs.existsSync(path.join(dir, p))) return true; } catch (_) {}
       }
-      return false;
+      // Y si hay fichas REALES aunque falte la plantilla: MISMA fuente de verdad que el motor
+      // (leerFichas). Sin esto, un proyecto con fichas cerradas + drift real pero sin _PLANTILLA.md
+      // quedaba sin candado y SIN que nadie lo reporte — la ficha mintiendo invisible que el candado
+      // existe para cazar (hallazgo del Red Team de la adopción, 2026-08-04).
+      try { return require('./raw-ficha-firma').leerFichas(dir).length > 0; } catch (_) { return false; }
     },
     detectar(dir) {
       if (!this._usaFichas(dir)) return false; // no usa fichas → el candado no aplica (no molesta)
@@ -180,4 +191,4 @@ const ADOPCIONES = [
   },
 ];
 
-module.exports = { ADOPCIONES };
+module.exports = { ADOPCIONES, versionMotor };

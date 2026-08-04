@@ -382,19 +382,48 @@ function correr(script, dir) { const r = spawnSync('node', [script, dir], { enco
   check('adopción ficha-firma: copia al día → NO se re-marca (idempotente)',
     !revisar(dOk).pendientes.some((p) => p.id === 'ficha-firma-motor')); }
 
+// ── REGRESIONES del Red Team de la ADOPCIÓN (2026-08-04) ─────────────────────────────────────────
+// FN-instalar: un proyecto con fichas REALES pero sin _PLANTILLA.md y sin candado → SÍ se reporta.
+{ const { revisar } = require('./raw-adopcion');
+  const d = tmpProyecto('inst-sin-plantilla');
+  fs.mkdirSync(path.join(d, 'docs', '_cobertura'), { recursive: true }); fs.mkdirSync(path.join(d, 'src', 'app'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'src', 'app', 'page.tsx'), 'const A = 1;\n');
+  fs.writeFileSync(path.join(d, 'docs', '_cobertura', 'B25.md'), '# B25\n\n**Fecha de cierre:** 2026-07-20\n\n## Cobertura firmada\n- src/app/page.tsx: deadbeef1234\n\n## Ajustes posteriores\n(ninguno)\n');
+  check('adopción B (FN): fichas reales SIN _PLANTILLA.md y sin candado → ficha-firma-instalar reporta',
+    revisar(d).pendientes.some((p) => p.id === 'ficha-firma-instalar')); }
+
+// adoptar-fallidas: un aplicar() que falla NO se reporta "al día" — cae en `fallidas`.
+{ const { adoptar } = require('./raw-adopcion');
+  const d = tmpProyecto('adopt-fallo');
+  fs.mkdirSync(path.join(d, 'src', 'lib', 'raw-ficha-firma.cjs'), { recursive: true }); // la .cjs es un DIRECTORIO → copyFileSync falla
+  const r = adoptar(d);
+  check('adopción B (fallo): copia que falla (sobre un directorio) → cae en fallidas, NO en aplicadas',
+    (r.fallidas || []).includes('ficha-firma-motor') && !r.aplicadas.includes('ficha-firma-motor')); }
+
+// versionMotor: anclado (un comentario no tapa el const) y acepta guion/ISO/+build (no null).
+{ const { versionMotor } = require('./adopciones');
+  check('adopción B (regex): versionMotor ignora un comentario "MOTOR_VERSION = ..." y toma el const real',
+    versionMotor("// nota vieja: MOTOR_VERSION = '9.9.9'\nconst MOTOR_VERSION = '2026.08.04';\n") === '2026.08.04');
+  check('adopción B (regex): versionMotor acepta guion/ISO y +build (no devuelve null)',
+    versionMotor("const MOTOR_VERSION = '2026-08-04';") === '2026-08-04' && versionMotor("const MOTOR_VERSION = '1.0+x';") === '1.0+x'); }
+
 // GUARD del sello: si el motor cambia y MOTOR_VERSION no, la adopción propagaría mintiendo "están al día".
 // Este test lo impide: fija el hash de la LÓGICA (motor sin la línea del sello) + la versión; tocar el
 // motor rompe el hash → hay que subir MOTOR_VERSION y actualizar SELLO acá. Convierte el "no me olvido
 // de versionar" en candado, no en disciplina.
 { const crypto = require('crypto');
+  const { versionMotor } = require('./adopciones'); // MISMO extractor que gobierna la propagación (no divergir: F2)
   const src = fs.readFileSync(path.join(HERE, 'raw-ficha-firma.js'), 'utf8');
-  const selloMotor = (src.match(/const MOTOR_VERSION\s*=\s*['"]([\w.]+)['"]/) || [])[1];
-  const logica = src.replace(/const MOTOR_VERSION\s*=\s*['"][\w.]+['"];?/, '');
+  const selloMotor = versionMotor(src);
+  const logica = src.replace(/^\s*const\s+MOTOR_VERSION\s*=\s*['"][\w.+-]+['"];?.*$/m, '');
   const logicHash = crypto.createHash('sha256').update(logica).digest('hex').slice(0, 12);
   const SELLO = { version: '2026.08.04', hash: '59fc5123ccbf' };
   check('motor-version: el motor lleva sello MOTOR_VERSION', !!selloMotor);
   check('motor-version: el sello del motor coincide con el SELLO del test', selloMotor === SELLO.version);
-  check('motor-version: si cambiás el motor, subí MOTOR_VERSION y este hash (SELLO en test-gobernanza)',
+  // Residuo declarado: esto obliga a TOCAR el sello, pero un dev que actualiza sólo el hash y NO la
+  // versión burla la propagación. El fix pleno (versión derivada del hash) re-propaga todo → se hará
+  // cuando el motor cambie de verdad. Por ahora el mensaje lo deja explícito.
+  check('motor-version: si cambiás la LÓGICA del motor → SUBÍ MOTOR_VERSION (no sólo este hash) y el SELLO acá',
     logicHash === SELLO.hash); }
 
 // CONVIVENCIA: las adopciones de trabajo en equipo. Lo que más importa probar no es que

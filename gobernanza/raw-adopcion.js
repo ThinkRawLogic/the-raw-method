@@ -28,16 +28,22 @@ function revisar(dir) {
   return { version: VERSION, versionProyecto: versionProyecto(dir), pendientes };
 }
 
-/** Aplica las AUTO pendientes; reporta las manuales; registra la versión adoptada. */
+/** Aplica las AUTO pendientes; reporta las manuales y las FALLIDAS; registra la versión adoptada. */
 function adoptar(dir) {
-  const aplicadas = [], manuales = [];
+  const aplicadas = [], manuales = [], fallidas = [];
   for (const a of ADOPCIONES) {
     if (!necesita(a, dir)) continue;
-    if (a.auto) { try { if (a.aplicar(dir)) aplicadas.push(a.id); } catch (_) {} }
-    else manuales.push({ id: a.id, titulo: a.titulo, instruccion: a.instruccion });
+    if (a.auto) {
+      let ok = false;
+      try { ok = !!a.aplicar(dir); } catch (_) { ok = false; }
+      // Un aplicar() que devuelve false o lanza (p.ej. copyFileSync sobre una .cjs de solo lectura) NO
+      // se traga: cae en `fallidas`. Tragárselo hacía que --aplicar reportara "al día" sobre un fallo
+      // — la mentira exacta que la propagación existe para evitar (hallazgo del Red Team, 2026-08-04).
+      (ok ? aplicadas : fallidas).push(a.id);
+    } else manuales.push({ id: a.id, titulo: a.titulo, instruccion: a.instruccion });
   }
   try { fs.writeFileSync(path.join(dir, '.raw-method-version'), VERSION + '\n'); } catch (_) {}
-  return { aplicadas, manuales };
+  return { aplicadas, manuales, fallidas };
 }
 
 module.exports = { revisar, adoptar, VERSION };
@@ -53,6 +59,11 @@ if (require.main === module) {
     if (r.manuales.length) {
       console.error(`⚠ ${r.manuales.length} mejora(s) requieren tu OK (chocan con algo del proyecto):`);
       for (const m of r.manuales) console.error('  · ' + m.titulo + '\n      → ' + m.instruccion);
+    }
+    if (r.fallidas.length) {
+      console.error(`⛔ raw-adopcion — ${r.fallidas.length} mejora(s) auto NO se pudieron aplicar (¿solo lectura? ¿permisos? ¿disco?): ${r.fallidas.join(', ')}`);
+      console.error('   NO quedaron adoptadas — resolvé el bloqueo y reintentá. (No se reporta "al día" en falso.)');
+      process.exit(1);
     }
     if (!r.aplicadas.length && !r.manuales.length) console.log('✓ raw-adopcion — proyecto al día con el método ' + VERSION + '.');
     process.exit(0);
