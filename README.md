@@ -17,6 +17,7 @@ especialmente cuando lo construye una IA dirigida por alguien que no es ingenier
 - **`referencias/`** — el detalle, que se carga cuando hace falta:
   - `pilares.md` — los 16 ángulos que revisa, con briefing de construcción y lentes de auditoría adversaria.
   - `auditoria-adversaria.md` — cómo se corre el Red Team (postura, 3 lentes, la criba, flota, formato de reporte) + **la cadena de una afirmación**, la postura que rige fuera de la auditoría.
+  - `correccion.md` — **el protocolo de corrección**: qué se hace DESPUÉS del hallazgo (las tres obligaciones al implementar un arreglo, quién corrige, y el control positivo).
   - `modelos-ia.md` — qué modelo de IA para qué tarea.
   - `documentos-vivos.md` — el ecosistema de documentos y para qué sirve cada uno.
   - `candados-y-capas.md` — las 3 capas de enforcement y cómo se construye un candado.

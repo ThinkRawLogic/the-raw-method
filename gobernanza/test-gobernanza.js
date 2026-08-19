@@ -95,6 +95,16 @@ function honestoConDeb(deb) {
 function fichaV4(cerrada, deb) {
   return '<!-- raw-ficha: v4 -->\n' + base(cerrada, KEYS_OK()) + honestoConDeb(deb) + REVISION_OK;
 }
+// v5 — el protocolo de corrección: la clave (ecosistema). `eco` = la LÍNEA de la clave (null =
+// ausente). La v5 trae todo lo de v4 (v5 ⊇ v4), así se prueba SÓLO (ecosistema), no otra falta.
+const ECO_OK = '- [x] **(ecosistema)** el protocolo de corrección. → (a) grepeé la FORMA sobre todo src/, no una lista mía (b) corrí las 42 unitarias antes y después (c) nació porque nadie validó el borde; esa causa no vive en otro lado. Control positivo: revertí el fix y el test se puso ROJO. Corrigió: agente-corrector.';
+const ECO_MUDA = '- [x] **(ecosistema)** el protocolo de corrección. → ___';
+const ECO_NA = '- [x] **(ecosistema)** el protocolo de corrección. → N/A — el bloque no corrigió nada, es construcción nueva.';
+function fichaV5(cerrada, eco, deb) {
+  const lineas = KEYS_OK();
+  if (eco) lineas.push(eco);
+  return '<!-- raw-ficha: v5 -->\n' + base(cerrada, lineas) + honestoConDeb(deb === undefined ? '(ninguna)' : deb) + REVISION_OK;
+}
 
 function correrGate(command, dir, home) {
   const opts = { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: dir }), encoding: 'utf8' };
@@ -149,7 +159,15 @@ function gitCommit(dir, msg) { spawnSync('git', ['-c', 'user.email=a@b.c', '-c',
   check('session: el reflejo trae la estampa de medición (medido: <resultado>, <fecha>)',
     /medido:\s*<resultado>,\s*<fecha>/.test(out));
   check('session: el reflejo INSTRUYE abrir con el banner Raw Logic (no depende del render del cliente)',
-    /PRIMERA respuesta/.test(out) && /Raw Logic \| A thinking venture/.test(out)); }
+    /PRIMERA respuesta/.test(out) && /Raw Logic \| A thinking venture/.test(out));
+  // Mismo motivo: si un refactor borra el protocolo del template, la regla que el dueño dictó
+  // TRES VECES vuelve a 📖 con la suite en verde. Se fija acá para que no pueda desaparecer sola.
+  check('session: el reflejo trae EL PROTOCOLO DE CORRECCIÓN (las tres obligaciones al implementar un arreglo)',
+    /PROTOCOLO DE CORRECCI/i.test(out) && /ECOSISTEMA/.test(out) && /control positivo/i.test(out));
+  check('session: el reflejo dice que corrige OTRO agente y que la premisa viaja ESCRITA (R1+R2)',
+    /OTRO agente/i.test(out) && /ESCRITA/.test(out));
+  check('session: la cadena arranca en FRESCURA (el eslabón cero: ¿la fuente corre hoy?)',
+    /frescura\s*→\s*existencia/i.test(out)); }
 { const d = con('bom', fichaConClaveMuda(true));
   const payload = "\uFEFF" + JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'git commit -m x' }, cwd: d });
   check('gate: payload con BOM (Windows) → BLOQUEA', spawnSync('node', [GATE], { input: payload, encoding: 'utf8' }).status === 2); }
@@ -259,6 +277,61 @@ function gitCommit(dir, msg) { spawnSync('git', ['-c', 'user.email=a@b.c', '-c',
     P('- [subjetiva-dueño] el color del botón de pago podría ser más claro (dominio-ok: es UI, no la lógica de plata)').length === 0);
   check('disp B: subjetiva NO-dominio (copy) → PASA sin acuse',
     P('- [subjetiva-dueño] la redacción del cartel podría ser más clara').length === 0); }
+
+// ========= Nivel 3.5 — el protocolo de corrección: clave (ecosistema), fichas v5 =========
+// CONTROL POSITIVO del candado nuevo: se le BORRA la clave a propósito y el commit tiene que caer.
+{ const r = correrGate('git commit -m x', con('v5sineco', fichaV5(true, null)));
+  check('gate: v5 cerrada SIN la clave (ecosistema) → BLOQUEADO [control positivo]', r.code === 2);
+  check('gate:   · nombra la clave que falta', /ecosistema/i.test(r.err)); }
+{ check('gate: v5 con (ecosistema) marcada pero MUDA → BLOQUEADO',
+    correrGate('git commit -m x', con('v5muda', fichaV5(true, ECO_MUDA))).code === 2); }
+{ check('gate: v5 con las tres obligaciones respondidas → PERMITIDO',
+    correrGate('git commit -m x', con('v5ok', fichaV5(true, ECO_OK))).code === 0); }
+// Falso N/A: el 50/50 declara un arreglo, así que el bloque SÍ corrigió → (ecosistema) no puede ser N/A.
+{ const r = correrGate('git commit -m x', con('v5nafalso', fichaV5(true, ECO_NA, '- [objetiva-arreglada] el parser tiraba acentos. → fix: commit 8246947')));
+  check('gate: v5 con (ecosistema) N/A pero una debilidad [objetiva-arreglada] → BLOQUEADO (falso N/A)', r.code === 2); }
+{ check('gate: v5 con (ecosistema) N/A y "(ninguna)" debilidad → PERMITIDO (bloque sin correcciones)',
+    correrGate('git commit -m x', con('v5nareal', fichaV5(true, ECO_NA))).code === 0); }
+// Forward-only: la v5 no brickea lo ya cerrado con marcador viejo ni las fichas abiertas.
+{ check('gate: ficha v4 (no v5) SIN (ecosistema) → PERMITIDO (forward-only por marcador)',
+    correrGate('git commit -m x', con('v4fwd', fichaV4(true, '(ninguna)'))).code === 0); }
+{ check('gate: v5 ABIERTA sin (ecosistema) → PERMITIDO (solo al cerrar)',
+    correrGate('git commit -m wip', con('v5open', fichaV5(false, null))).code === 0); }
+// Unitarias (sin spawn): la frontera exacta del candado.
+{ const { problemasDeEcosistema, declaraArreglo, parseFicha, esFicha, esV5 } = require('./raw-cobertura');
+  const F = (eco, deb) => parseFicha(fichaV5(true, eco, deb), 'b.md');
+  check('eco unit: clave respondida → sin problemas', problemasDeEcosistema(F(ECO_OK)).length === 0);
+  check('eco unit: clave ausente → 1 problema', problemasDeEcosistema(F(null)).length === 1);
+  check('eco unit: N/A sin arreglos declarados → sin problemas', problemasDeEcosistema(F(ECO_NA)).length === 0);
+  check('eco unit: N/A + debilidad arreglada → 1 problema',
+    problemasDeEcosistema(F(ECO_NA, '- [objetiva-arreglada] x → fix: commit 8246947')).length === 1);
+  // La GUÍA de la plantilla nombra "[objetiva-arreglada]" como ejemplo: NO debe contar como arreglo real
+  // (si contara, ninguna ficha podría volver a marcar N/A — el candado se volvería un no-op inverso).
+  const GUIA_V4 = '> - `[objetiva-arreglada]` bug / test que miente → **referencia al fix**.\n';
+  check('eco unit: la guía en blockquote NO cuenta como arreglo declarado',
+    declaraArreglo('## Debilidades\n' + GUIA_V4 + '(ninguna)\n\n## Fin\n') === false);
+  check('eco unit: un bullet real SÍ cuenta como arreglo declarado',
+    declaraArreglo('## Debilidades\n- [objetiva-arreglada] x → fix: commit 8246947\n\n## Fin\n') === true);
+  check('eco unit: el marcador v5 activa el candado (y v4 no)', esV5('<!-- raw-ficha: v5 -->') === true && esV5('<!-- raw-ficha: v4 -->') === false);
+  // C: NO contamina proyectos con su PROPIO juego de claves que ya usan (ecosistema). Como la clave
+  // quedó fuera de CLAVES_CANONICAS, un .md así sigue sin ser "ficha del método" → nadie le exige las 15.
+  const ajena = parseFicha('# Ficha ajena\n\n**Fecha de cierre:** 2026-08-18\n\n- [x] **(ecosistema)** las tres obligaciones → sí\n- [x] **(permiso-aislamiento)** requirePermission → sí\n', 'x.md');
+  check('eco unit: una ficha AJENA con (ecosistema) y claves propias NO entra como ficha del método',
+    ajena.claves.has('ecosistema') && esFicha(ajena) === false); }
+
+// ===== CRLF: una ficha escrita en Windows NO puede volver invisible al candado =====
+// El `.` de JS no matchea `\r`, así que con finales CRLF el `(.*)$` de la regex de claves no
+// llegaba al final: 0 claves parseadas → esFicha() false → la ficha quedaba FUERA del gate y el
+// commit pasaba. Fail-open silencioso. (medido: 2026-08-18 — misma ficha, LF: 15 claves / CRLF: 0.)
+{ const crlf = (t) => t.replace(/\r?\n/g, '\r\n');
+  const r = correrGate('git commit -m x', con('crlf-muda', crlf(fichaConClaveMuda(true))));
+  check('CRLF: ficha con clave MUDA y finales \\r\\n → BLOQUEADO (antes: invisible, pasaba)', r.code === 2);
+  check('CRLF: ficha CRLF resuelta → PERMITIDO (no es un bloqueo indiscriminado)',
+    correrGate('git commit -m x', con('crlf-ok', crlf(fichaResuelta(true)))).code === 0);
+  const { parseFicha, esFicha } = require('./raw-cobertura');
+  check('CRLF unit: LF y CRLF parsean el MISMO número de claves',
+    parseFicha(fichaResuelta(true)).claves.size === parseFicha(crlf(fichaResuelta(true))).claves.size);
+  check('CRLF unit: una ficha CRLF sigue siendo reconocida como ficha', esFicha(parseFicha(crlf(fichaResuelta(true)))) === true); }
 
 // ============== Nivel 4 — REGRESIONES del red-team adversario ================
 

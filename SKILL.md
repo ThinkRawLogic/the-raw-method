@@ -79,13 +79,34 @@ Pero hay una segunda postura que evita inflar la lista de problemas: **refutar p
 
 Lo delicado (dinero, seguridad) se audita en el modo más exigente: **la flota adversaria** — varios agentes de IA atacando el mismo código en paralelo, cada uno por una dimensión distinta, **solo lectura**, refutando por defecto, hasta que dos rondas seguidas no encuentren nada nuevo. Detalle en `referencias/auditoria-adversaria.md`.
 
-**Y la tercera postura, que rige TAMBIÉN fuera de la auditoría — la cadena de una afirmación.** Cazar y refutar disparan al cerrar un bloque; pero la mayoría de las afirmaciones que recibe el dueño nacen ANTES, en medio del flujo (*"esto está inflado"*, *"este bug cuesta $X"*, *"la causa es Y"*), y una afirmación equivocada dicha con confianza hace el mismo daño que un bug: el dueño decide sobre ella. Para esas rige la cadena: **existencia → dirección → magnitud, en ese orden, y el eslabón más barato primero.** ¿El efecto existe (alguien consume ese número, el fenómeno está en los datos)? ¿Va hacia donde digo? Recién entonces: ¿cuánto? Medir la magnitud primero es la trampa clásica — *se siente* como verificar, porque son queries y cifras, pero se puede medir con tres decimales un efecto que no existe. Una afirmación con un eslabón sin cerrar se entrega como **hipótesis**, nunca como dato. (El caso que parió la regla — cuatro caídas en una noche, todas con la misma pata — en `referencias/auditoria-adversaria.md` §2.)
+**Y la tercera postura, que rige TAMBIÉN fuera de la auditoría — la cadena de una afirmación.** Cazar y refutar disparan al cerrar un bloque; pero la mayoría de las afirmaciones que recibe el dueño nacen ANTES, en medio del flujo (*"esto está inflado"*, *"este bug cuesta $X"*, *"la causa es Y"*), y una afirmación equivocada dicha con confianza hace el mismo daño que un bug: el dueño decide sobre ella. Para esas rige la cadena: **frescura → existencia → dirección → magnitud, en ese orden, y el eslabón más barato primero.** ¿La fuente que estoy leyendo es la que corre hoy (una fecha, el eslabón cero)? ¿El efecto existe (alguien consume ese número, el fenómeno está en los datos)? ¿Va hacia donde digo? Recién entonces: ¿cuánto? Medir la magnitud primero es la trampa clásica — *se siente* como verificar, porque son queries y cifras, pero se puede medir con tres decimales un efecto que no existe. Una afirmación con un eslabón sin cerrar se entrega como **hipótesis**, nunca como dato. (El caso que parió la regla — cuatro caídas en una noche, todas con la misma pata — en `referencias/auditoria-adversaria.md` §2.)
 
 ### ⚪ White Team — ¿logramos el objetivo?
 Un Red Team verde **no basta**: puede estar todo bien construido y ser **lo que no era**. El White Team sostiene la META y juzga el **resultado contra la intención**: ¿esto logró de verdad lo que se buscaba? Si el *para qué* no quedó claro en el diseño, **se pregunta ANTES de auditar** — no se puede medir un blanco que nunca se definió. Ojo con el **sesgo de retro-ajuste**: fija el objetivo *independiente* de lo ya construido, o se moldea para calzar con el resultado y la auditoría se auto-aprueba. (El nombre viene de los ejercicios de seguridad: el White Team es el árbitro que define el objetivo y juzga si se cumplió.)
 
 ### 🔵 Blue Team — ¿lo estamos vigilando?
 En producción: **monitoreo y alertas** (el pilar de observabilidad/operabilidad). Que algo **avise** cuando se rompe — que un incidente no dependa de que lo reporte un cliente.
+
+---
+
+## Ya tengo el hallazgo, ¿ahora qué? — el protocolo de corrección
+
+La auditoría termina en un **hallazgo**. Lo que sigue —**implementar el arreglo**— es la parte más peligrosa del trabajo, porque un hallazgo bien cazado y mal corregido deja el sistema peor que antes, y encima con la etiqueta de "revisado". Eso lo gobierna **el protocolo de corrección**. *(Ojo con el nombre: **no son "pilares"** — los pilares son los 16 ángulos que se revisan. Aquéllos dicen qué mirar; éste, cómo se toca el código una vez que ya encontraste el problema.)*
+
+**Las tres obligaciones — van al IMPLEMENTAR, no al encontrar:**
+
+1. **El ECOSISTEMA, no el proceso.** Antes de tocar: qué depende de lo que voy a tocar y qué se desprende de ello. Se busca **por la FORMA sobre todo el código**, nunca sobre una lista armada con la propia hipótesis — un grep hecho desde tu hipótesis esconde justo lo que hay que encontrar. *(Un hallazgo señala un lugar, no una clase.)*
+2. **Asegurar lo que SÍ funciona.** No alcanza con arreglar lo roto: hay que **probar** que lo sano sigue sano. *"Revisé"* no es una respuesta; la respuesta es **cómo se probó**.
+3. **Por qué NACIÓ el hueco** — qué se dejó de hacer o qué se hizo mal — **y si esa causa vive en otro lado**. Sin esto se arregla el caso y vuelve la clase.
+
+**Y las cuatro reglas que las acompañan:**
+
+- **R1 — Quien corrige NO es quien auditó, y NO es quien construyó el defecto.** El que construyó arrastra el modelo mental que produjo el defecto; el que auditó corrige *su* hallazgo, no la clase.
+- **R2 — La premisa viaja ESCRITA en el encargo del agente que corrige**, nunca implícita. Un candado comprueba que algo *existe*, no que se *cumpla*: si no está en el encargo, no se aplica.
+- **R3 — El coordinador arma el encargo y verifica; no ejecuta.** El encargo lleva cuatro partes: hallazgo · evidencia · la premisa · **y qué NO se puede romper**.
+- **R4 — La clave `(ecosistema)` de la ficha de cobertura**, con las tres obligaciones respondidas por escrito + **control positivo** (cada arreglo se revierte y su candado se pone ROJO). Es el único punto donde esto se hace exigible en el `git commit`.
+
+**Capa: 🤖 candado + 👁 declarado.** El candado exige que las tres respuestas **existan** (fichas `raw-ficha: v5`) y que un bloque que sí corrigió algo no marque la clave N/A; que sean **verdaderas** es juicio, y así queda declarado — nunca disfrazado de candado. Detalle, encargo copiable y los tres casos medidos en **`referencias/correccion.md`**.
 
 ---
 
@@ -225,7 +246,7 @@ NO es permiso para sobre-construir.
 - [ ] Compila, pasa el linter (corrector de estilo automático) y el build (armado final del programa), **en verde** (sin errores).
 - [ ] Tiene un **test que reproduce el escenario** (y, si arregla un bug, un test de regresión que lo cazaría de nuevo).
 - [ ] Los **candados 🤖 pertinentes** pasan (el arnés vive en `candados/`; el enforce a nivel host, en `gobernanza/`); lo que no se pudo automatizar quedó **revisado 👁 y registrado**.
-- [ ] La **auditoría adversaria** de los ángulos tocados corrió, y sus hallazgos están cerrados o anotados.
+- [ ] La **auditoría adversaria** de los ángulos tocados corrió, y sus hallazgos están cerrados o anotados. Lo que se corrigió pasó por **el protocolo de corrección** (las tres obligaciones + control positivo), no por un parche suelto.
 - [ ] Si es UI: **verificado en el navegador** (hay errores que el compilador no caza).
 - [ ] Los **documentos** quedaron al día en el mismo cambio.
 - [ ] **El dueño dio el OK** para cerrar (el cierre no se declara solo).
@@ -261,6 +282,7 @@ Cada pilar tiene un nombre en llano + su término técnico, y trae *qué chequea
 
 - `referencias/pilares.md` — los 16 ángulos con briefing + cómo atacarlo (auditoría adversaria).
 - `referencias/auditoria-adversaria.md` — cómo se corre el Red Team: postura, 3 lentes, **la criba**, flota, loop-hasta-secar, formato de reporte — y **la cadena de una afirmación**, la postura que rige fuera de la auditoría.
+- `referencias/correccion.md` — **el protocolo de corrección**: qué se hace DESPUÉS del hallazgo. Las tres obligaciones (ecosistema · asegurar lo sano · por qué nació), las cuatro reglas (quién corrige, la premisa escrita, el reparto de papeles, la clave `(ecosistema)`), el encargo copiable y el control positivo.
 - `referencias/modelos-ia.md` — qué modelo para qué tarea, con analogías.
 - `referencias/documentos-vivos.md` — el ecosistema de documentos y para qué sirve cada uno.
 - `referencias/candados-y-capas.md` — las 3 capas de enforcement y cómo se construye un candado.

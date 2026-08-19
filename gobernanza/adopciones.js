@@ -212,6 +212,30 @@ const ADOPCIONES = [
       '[objetiva-irreducible] / [subjetiva-dueño] / [diferida-dueño]) — copialo de plantillas/ficha-cobertura.md ' +
       'del método. Así ninguna debilidad del cierre queda colgando (el candado central sólo actúa sobre fichas v4).',
   },
+  {
+    id: 'ecosistema-v5-plantilla',
+    desde: '2026.08.18',
+    titulo: 'La plantilla de ficha sube a v5: la clave (ecosistema) — el protocolo de corrección, respondido por escrito',
+    auto: false, // agrega una clave a la lista de la plantilla (doc del proyecto) → OK del dueño
+    _plantilla(dir) {
+      for (const p of ['docs/_cobertura/_PLANTILLA.md', '_cobertura/_PLANTILLA.md', 'docs/_cobertura/_plantilla.md', 'plantillas/ficha-cobertura.md']) {
+        try { const f = path.join(dir, p); if (fs.existsSync(f)) return f; } catch (_) {}
+      }
+      return null;
+    },
+    detectar(dir) {
+      const f = this._plantilla(dir);
+      if (!f) return false; // no usa fichas → no aplica
+      const m = leer(f).match(/raw-ficha:\s*v(\d+)/i);
+      return !m || parseInt(m[1], 10) < 5; // plantilla por debajo de v5 → falta adoptar
+    },
+    instruccion:
+      'El método ya no termina en el hallazgo: ahora dice cómo se IMPLEMENTA la corrección (las tres ' +
+      'obligaciones — el ecosistema, asegurar lo que sí funciona, por qué nació el hueco). Subí tu plantilla ' +
+      'de ficha a v5: cambiá el marcador de arriba a `raw-ficha: v5` y pegá la clave **(ecosistema)** ' +
+      '(copiala de plantillas/ficha-cobertura.md del método, va junto a la clave (auditoría)). ' +
+      'Leé referencias/correccion.md antes de cerrar el próximo bloque que corrija algo.',
+  },
 ];
 
 module.exports = { ADOPCIONES, versionMotor };

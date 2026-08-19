@@ -15,6 +15,8 @@ Cada pilar trae cinco cosas: **qué es** (en llano), **qué chequea** (preguntas
 
 > Los pilares **1–10** son la base heredada de proyectos reales. Los **11–16** salieron de auditar el propio método de forma adversaria: eran huecos de clase que nadie estaba mirando. El **16** (compatibilidad hacia afuera) es el más reciente — salió de contrastar el método contra la mirada de una *due-diligence* externa.
 
+> 🔴 **Ojo con la palabra "pilares": es ESTO y solo esto** — los 16 ángulos de abajo. Lo que se hace **después** del hallazgo (cómo se implementa la corrección: quién la hace, qué mira antes de tocar, cómo prueba que no rompió lo sano) es otra cosa, se llama **el protocolo de corrección** y vive en **`correccion.md`**. Los pilares dicen *qué mirar*; el protocolo, *cómo se toca el código una vez que ya encontraste el problema*.
+
 ---
 
 ## 1. Orden y claridad — *Arquitectura & Mantenibilidad*

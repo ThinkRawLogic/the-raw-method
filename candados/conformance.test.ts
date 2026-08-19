@@ -58,9 +58,16 @@ const PROMPT_ARRANQUE =
 // el candado no lo molesta.
 // ===========================================================================
 
-// Las claves canónicas de la ficha (deben coincidir con plantillas/ficha-cobertura.md).
-// Si agregas una clave a la plantilla, agrégala también acá: el candado exige que
-// TODAS estén presentes en cada ficha cerrada, así una ficha no puede "perder" un ángulo.
+// Las claves BASE de la ficha — las que este arnés exige a TODA ficha cerrada, sea cual sea
+// su versión. Si agregas una clave PROPIA de tu proyecto a la plantilla, agrégala también acá:
+// el candado exige que todas estén presentes, así una ficha no puede "perder" un ángulo.
+//
+// Frontera declarada, para que no se lea como un olvido: las claves y secciones que el método
+// suma por VERSIÓN de ficha (v2 honestidad + auditor · v3 "Qué revisar" · v4 disposición de
+// debilidades · v5 la clave `(ecosistema)` del protocolo de corrección) NO se exigen acá.
+// Las hace cumplir `gobernanza/` (raw-gate en el commit, raw-check en CI), que sí lee el
+// marcador `raw-ficha: vN` y por eso puede ser forward-only sin invalidar fichas ya cerradas.
+// Este arnés es el piso portable; la gobernanza es la capa que evoluciona con el método.
 const CLAVES_CANONICAS = [
   "spec-leída",
   "orden",

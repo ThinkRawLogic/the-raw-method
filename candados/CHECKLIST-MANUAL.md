@@ -19,9 +19,9 @@ Una nota de uso: recórrelo **de arriba a abajo, en voz alta o por escrito**. Le
 
 **Cuándo:** al declarar CERRADO un bloque, antes de decir "listo".
 
-**La regla:** un bloque cerrado **resuelve todas sus claves.** Cada una de las 15 claves de la ficha de cobertura queda `[x]` con una nota de cómo se cumplió, o `[x] N/A — <por qué no aplica>`. Una clave en `[ ]`, o marcada pero con su nota vacía, **no cuenta como cerrada.** N/A es una respuesta que se escribe, no una clave que se saltea.
+**La regla:** un bloque cerrado **resuelve todas sus claves.** Cada clave de la ficha de cobertura queda `[x]` con una nota de cómo se cumplió, o `[x] N/A — <por qué no aplica>`. Una clave en `[ ]`, o marcada pero con su nota vacía, **no cuenta como cerrada.** N/A es una respuesta que se escribe, no una clave que se saltea.
 
-**Recórrelo así:** abre la ficha del bloque (`plantillas/ficha-cobertura.md`) y confirma que **estas 15 claves están todas presentes y todas resueltas.** Si falta una clave en la ficha, o una quedó muda, el bloque no está cerrado:
+**Recórrelo así:** abre la ficha del bloque (`plantillas/ficha-cobertura.md`) y confirma que **todas estas claves están presentes y resueltas.** Si falta una clave en la ficha, o una quedó muda, el bloque no está cerrado:
 
 - [ ] **(spec-leída)** — resuelta con nota, o N/A con motivo
 - [ ] **(orden)** — resuelta con nota, o N/A con motivo
@@ -36,6 +36,7 @@ Una nota de uso: recórrelo **de arriba a abajo, en voz alta o por escrito**. Le
 - [ ] **(dato)** — resuelta con nota, o N/A con motivo
 - [ ] **(tests)** — resuelta con nota, o N/A con motivo
 - [ ] **(auditoría)** — resuelta con nota, o N/A con motivo
+- [ ] **(ecosistema)** *(desde la ficha v5)* — las tres obligaciones del **protocolo de corrección** respondidas por escrito (qué dependía y **cómo lo busqué** · cómo **probé** que lo sano sigue sano · por qué **nació** el hueco), más el control positivo y **quién corrigió**; o N/A si el bloque no corrigió nada
 - [ ] **(docs)** — resuelta con nota, o N/A con motivo
 - [ ] **(OK)** — resuelta con nota, o N/A con motivo
 

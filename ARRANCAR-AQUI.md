@@ -32,6 +32,8 @@ Sobre lo que mueve plata, o sobre el objetivo del bloque, corres la **auditoría
 
 Regla dura: **el auditor tiene que ser otro** — otro agente, con ojos frescos. El que construyó arrastra los mismos supuestos con los que construyó, y si se audita a sí mismo se auto-aprueba.
 
+Y una regla hermana que se olvida siempre: **el que corrige también tiene que ser otro.** La auditoría termina en un *hallazgo*; implementar el arreglo es un trabajo aparte, con sus propias reglas — mirar todo lo que depende de lo que vas a tocar, **probar** que lo que ya funcionaba sigue funcionando, y preguntarse **por qué nació** el hueco. Eso es **el protocolo de corrección** (`referencias/correccion.md`), y al cerrar se responde por escrito en la clave `(ecosistema)` de la ficha.
+
 ### 3. Mantén la ley honesta
 La "ley" es el documento donde viven tus reglas. La regla acá es simple: **un documento que miente sobre el estado del proyecto es un bug.** Si arreglaste algo, si una regla cambió, si algo quedó a medias — el documento lo dice, en el mismo cierre. Un doc desactualizado es peor que no tenerlo, porque construyes encima confiando en algo falso.
 

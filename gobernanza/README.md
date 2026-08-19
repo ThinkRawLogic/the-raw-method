@@ -115,6 +115,27 @@ declarás un **Rastro de auditoría** que sea un archivo, tiene que existir y no
 > que el auditor sea *de verdad* independiente. La señal fuerte (que el harness escriba quién auditó) es
 > out-of-band; ese es el piso irreducible del método.
 
+**3.3 — OK informado (fichas `raw-ficha: v3`).** La sección *"Qué revisar — para el dueño"* es obligatoria:
+la lista corta y priorizada de lo que ÉL verifica antes de dar el OK. Sin ella —o vacía— el cierre se rechaza.
+
+**3.4 — Disposición de debilidades (fichas v4).** Ninguna debilidad del 50/50 queda colgando: cada una lleva
+su disposición al frente (`objetiva-arreglada` con **referencia al fix** · `objetiva-irreducible` · `subjetiva-dueño`
+· `diferida-dueño`). Y si una debilidad de **dominio objetivo** (dinero/seguridad/concurrencia) se marca como
+juicio del dueño, se exige un acuse explícito `(dominio-ok: …)` — el hueco donde un bug se disfraza de gusto.
+
+**3.5 — El protocolo de corrección (fichas v5).** El método llegaba hasta el **hallazgo** y no decía nada de
+cómo se implementa el arreglo. La clave **`(ecosistema)`** lo hace exigible al commit: las tres obligaciones
+respondidas por escrito (*qué dependía de lo que toqué y **cómo lo busqué** · cómo **probé** que lo sano sigue
+sano · por qué **nació** el hueco*), el **control positivo** y **quién corrigió**. Y un sub-chequeo que cierra
+el escape barato: si el 50/50 declara una debilidad `[objetiva-arreglada]`, el bloque **sí** corrigió algo, así
+que un `N/A` en esa clave se rechaza como falso. Que la respuesta sea *verdadera* sigue siendo 👁 — declarado,
+no disfrazado de candado. Detalle: `referencias/correccion.md`.
+
+> **Los marcadores de versión son monótonos** (`v5 ⊇ v4 ⊇ v3 ⊇ …`): cada versión activa un candado más y hereda
+> los anteriores. Forward-only a propósito — adoptar el método nuevo no vuelve inválidas las fichas ya cerradas
+> con un marcador viejo. Lo que empuja la adopción es `adopciones.js`, que avisa en cada sesión que la plantilla
+> del proyecto quedó atrás.
+
 ---
 
 ## Instalar

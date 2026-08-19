@@ -1,5 +1,5 @@
 # Ficha de cobertura — bloque [Nº / nombre]
-<!-- raw-ficha: v4 -->  <!-- NO borrar: activa los candados del "OK informado" (Qué revisar) y de la disposición de debilidades. -->
+<!-- raw-ficha: v5 -->  <!-- NO borrar: activa los candados del "OK informado" (Qué revisar), de la disposición de debilidades y de la clave (ecosistema) del protocolo de corrección. -->
 
 
 > **Plantilla de The Raw Method.** Al CERRAR un bloque de trabajo, copia esta ficha y **resuelve cada clave**:
@@ -42,6 +42,7 @@
 - [ ] **(dato)** Si toca migraciones/datos: es reversible, hay respaldo probado. (o N/A) → ___
 - [ ] **(tests)** Hay un test que reproduce el escenario; si es un bug, su test de regresión. → ___
 - [ ] **(auditoría)** La corrió un **revisor independiente** (agente fresco, distinto del que construyó): auditoría adversaria de los ángulos tocados, hallazgos pasados por las 3 lentes, cerrados o anotados. → ___
+- [ ] **(ecosistema)** **El protocolo de corrección** (`referencias/correccion.md`) — si el bloque CORRIGIÓ algo, respondé en la nota: **(a)** qué dependía de lo que toqué y **cómo lo busqué** (por la FORMA sobre todo el código, no por una lista armada con mi hipótesis); **(b)** qué seguía funcionando bien y **cómo PROBÉ** que sigue sano (no «revisé»: cómo); **(c)** por qué **nació** el hueco —qué se dejó de hacer— y si esa causa vive en otro lado; **el control positivo** (cada arreglo revertido y su candado en ROJO); y **quién corrigió** (R1: distinto del que auditó y del que construyó el defecto). Si el bloque no corrigió nada, `N/A — <por qué>`. → ___
 - [ ] **(docs)** Ley, backlog, bitácora y todo doc desfasado quedaron al día en este mismo cambio. → ___
 - [ ] **(OK)** El dueño dio el visto bueno para cerrar. → ___
 

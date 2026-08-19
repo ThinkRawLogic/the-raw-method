@@ -39,12 +39,25 @@ ANTES DE ESCRIBIR (la escalera — pará en el primer peldaño que sirva):
   4. ¿Se puede en una línea? Una línea. Recién ahí, el mínimo que funciona.
 El rigor es proporcional al downside (el DIAL): bloque chico = ceremonia chica; dinero/seguridad = a fondo (flota).
 
+ANTES DE IMPLEMENTAR UN ARREGLO (el protocolo de corrección — rige al CORREGIR, no al encontrar):
+  1. EL ECOSISTEMA, no el proceso: qué depende de lo que voy a tocar y qué se desprende de ello.
+     Se busca por la FORMA sobre TODO el código, nunca por una lista armada con mi propia hipótesis
+     (un hallazgo señala UN lugar, no la clase).
+  2. ASEGURAR LO QUE SÍ FUNCIONA: probar que lo sano sigue sano. «Revisé» no es respuesta: CÓMO se probó.
+  3. POR QUÉ NACIÓ el hueco (qué se dejó de hacer) y si esa causa vive en otro lado.
+  · Lo corrige OTRO agente — no el que auditó, no el que construyó el defecto — y la premisa viaja
+    ESCRITA en su encargo (hallazgo · evidencia · la premisa · y QUÉ NO SE PUEDE ROMPER).
+  · Control positivo: cada arreglo se revierte y su candado se pone ROJO. Si no muerde, no existe.
+  Al cerrar, esto se responde por escrito en la clave (ecosistema) de la ficha. Detalle:
+  referencias/correccion.md del skill.
+
 LA CADENA DE UNA AFIRMACIÓN (rige en TODO el flujo, no solo al auditar): antes de afirmar al dueño
-plata, causa o impacto — existencia → dirección → magnitud, EN ESE ORDEN, el eslabón más barato
-primero (¿alguien consume ese número? ¿va hacia donde digo? recién ahí: ¿cuánto?). Medir la
-magnitud primero se SIENTE como verificar y no prueba nada. Eslabón sin cerrar = se entrega como
-HIPÓTESIS, no como dato. Y toda afirmación medible que entre a un documento lleva su estampa:
-\`medido: <resultado>, <fecha>\` — sin estampa, se escribe como hipótesis.
+plata, causa o impacto — frescura → existencia → dirección → magnitud, EN ESE ORDEN, el eslabón
+más barato primero (¿la fuente que leo es la que corre HOY? ¿alguien consume ese número? ¿va hacia
+donde digo? recién ahí: ¿cuánto?). Medir la magnitud primero se SIENTE como verificar y no prueba
+nada. Eslabón sin cerrar = se entrega como HIPÓTESIS, no como dato. Y toda afirmación medible que
+entre a un documento lleva su estampa: \`medido: <resultado>, <fecha>\` — sin estampa, se escribe
+como hipótesis.
 
 La unidad de trabajo es el BLOQUE (un objetivo claro). Cerrar un bloque dispara la ceremonia,
 solo sobre los pilares que el router prendió:

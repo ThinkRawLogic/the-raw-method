@@ -181,7 +181,7 @@ function main() {
   if (declaraCierre && cerradas.length === 0 && idxCerradas.length === 0) {
     return block(
       'El commit declara un CIERRE de bloque pero no hay ninguna ficha de cobertura cerrada.\n' +
-      '  · Copiá plantillas/ficha-cobertura.md, resolvé sus 15 claves y llená "Fecha de cierre".'
+      '  · Copiá plantillas/ficha-cobertura.md, resolvé TODAS sus claves y llená "Fecha de cierre".'
     );
   }
 

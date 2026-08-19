@@ -97,6 +97,32 @@ que lo reporte un cliente.
 
 ---
 
+## Paso 1b — Implementar las correcciones (el protocolo de corrección)
+
+Las tres auditorías dejan **hallazgos**. Lo que sigue es la parte más peligrosa del cierre: un hallazgo bien
+cazado y mal corregido deja el sistema peor que antes, y encima con la etiqueta de "revisado". Eso lo gobierna
+**el protocolo de corrección** (`referencias/correccion.md`). Si el bloque no corrigió nada, este paso se salta
+y la clave `(ecosistema)` del Paso 2 se marca `N/A` con esa razón.
+
+**Quién lo hace:** 🔴 **otro agente** — ni el que auditó, ni el que construyó el defecto. El que construyó
+arrastra el modelo mental que lo produjo; el que auditó corrige *su* hallazgo, no la clase. El coordinador
+**arma el encargo y verifica; no ejecuta**.
+
+**Qué lleva el encargo** (las cuatro partes; si no está escrita, no se aplica): hallazgo · evidencia
+(archivo:línea, el test que falla) · **la premisa escrita** · y **qué NO se puede romper**.
+
+**Las tres obligaciones, antes de tocar:**
+
+1. **El ecosistema, no el proceso** — qué depende de lo que vas a tocar. Se busca **por la FORMA sobre todo el
+   código**, nunca por una lista armada con tu propia hipótesis.
+2. **Asegurar lo que sí funciona** — probar que lo sano sigue sano. *"Revisé"* no es una respuesta: **cómo**.
+3. **Por qué nació el hueco** — qué se dejó de hacer, y si esa causa vive en otro lado.
+
+**Y el control positivo, sin excepción:** cada arreglo se revierte, se comprueba que su candado se pone
+**ROJO**, y se vuelve a aplicar. Un candado que no se pone rojo al reintroducir el defecto no es un candado.
+
+---
+
 ## Paso 2 — Resolver la ficha de cobertura
 
 Abre la ficha de cobertura del bloque (`plantillas/ficha-cobertura.md`) y **resuelve cada clave, sin saltarte
@@ -106,6 +132,10 @@ ninguna**:
 - Una clave en `[ ]`, o marcada pero **muda** (sin nota), **no cuenta como cerrada**.
 - **N/A es una respuesta que se escribe**, no una clave que se salta. Un bloque de pura pantalla puede marcar
   `N/A` en concurrencia — pero lo dice y explica por qué.
+- 🤖 **Si el bloque corrigió algo, la clave `(ecosistema)` no puede quedar en `N/A`**: ahí van las tres
+  obligaciones del Paso 1b respondidas por escrito, el control positivo y **quién corrigió**. En una ficha
+  v5 el candado lo exige — y si el 50/50 declara una debilidad `[objetiva-arreglada]`, un `N/A` en esa clave
+  se rechaza como falso.
 
 🤖 La lista de claves la impone la **plantilla**, no quien programó — así no se puede "olvidar" un ángulo.
 El ideal es un test que **haga fallar el cierre** si el bloque no tiene su ficha o deja una clave muda.
@@ -170,7 +200,8 @@ Todo lo de arriba **prepara** el cierre. No lo declara.
 
 ### Resumen de una línea
 
-Tres auditorías (🔴 ¿roto? · ⚪ ¿logramos el objetivo? · 🔵 ¿lo vigilamos?) → ficha de cobertura resuelta →
-documentos al día → reporte honesto → **OK del dueño.** Nada se cierra sin lo último.
+Tres auditorías (🔴 ¿roto? · ⚪ ¿logramos el objetivo? · 🔵 ¿lo vigilamos?) → corregir con el protocolo de
+corrección (otro agente, las tres obligaciones, control positivo) → ficha de cobertura resuelta → documentos
+al día → reporte honesto → **OK del dueño.** Nada se cierra sin lo último.
 
 *The Raw Method · Raw Logic · No fluff. No licenses. No surprises.*

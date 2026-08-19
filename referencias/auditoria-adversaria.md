@@ -51,11 +51,14 @@ Atacar y refutar disparan cuando se audita. Pero la mayoría de las afirmaciones
 
 La regla:
 
-> **Toda afirmación de plata, causa o impacto recorre su cadena ANTES de entregarse: existencia → dirección → magnitud. En ese orden, y el eslabón más barato primero. Si un eslabón quedó sin verificar, la afirmación se entrega como HIPÓTESIS, no como dato.**
+> **Toda afirmación de plata, causa o impacto recorre su cadena ANTES de entregarse: frescura → existencia → dirección → magnitud. En ese orden, y el eslabón más barato primero. Si un eslabón quedó sin verificar, la afirmación se entrega como HIPÓTESIS, no como dato.**
 
-- **Existencia** — ¿el efecto es real? ¿Alguien consume ese número? ¿El fenómeno está en los datos, o solo en mi razonamiento? *(El eslabón más barato — un grep, un GROUP BY — y el que más afirmaciones mata.)*
+- **Frescura** — ¿la fuente que estoy leyendo es la que **corre hoy**? ¿De cuándo es? *(El eslabón cero, y el más barato de todos: una fecha. Se agregó después de los otros tres — ver abajo.)*
+- **Existencia** — ¿el efecto es real? ¿Alguien consume ese número? ¿El fenómeno está en los datos, o solo en mi razonamiento? *(Un grep, un GROUP BY — y el que más afirmaciones mata.)*
 - **Dirección** — ¿va hacia donde digo? ¿Infla o desinfla? ¿La causa precede al efecto?
 - **Magnitud** — recién ahora: ¿cuánto?
+
+**Por qué la frescura va PRIMERA y no dentro de la existencia.** Porque una fuente vieja **pasa** el examen de existencia: el número está ahí, el código está ahí, todo se puede verificar — solo que de algo que ya no corre. *`medido: 2026-08-18`* — cuatro conclusiones de un mapeo se desmintieron porque el panel de referencia que se estaba leyendo tenía **~8 meses**, y nadie preguntó la fecha antes de discutir el contenido. No fue leer mal: fue leer bien lo que ya no rige. Un eslabón que cuesta una fecha va antes que uno que cuesta una query.
 
 **La trampa que esta regla mata: medir la magnitud primero.** Es la tentación natural — el número grande es el titular — y *se siente* como verificación, porque son queries y cifras. Pero la magnitud no prueba ni que el efecto exista ni hacia dónde va. Se puede medir con tres decimales un efecto que no existe.
 
@@ -189,6 +192,8 @@ Decir "esto no lo probé" no es debilidad del reporte: **es su mayor virtud.** U
 La auditoría no termina cuando se arreglan los bugs encontrados. Cada hallazgo confirmado se **destila a una regla** que mata la **clase entera** de ese escenario — no solo el caso puntual — y, siempre que se pueda, a un **candado 🤖** que lo impida solo en el futuro.
 
 Ese es el motor que hace que la auditoría encuentre **cada vez menos**: lo que ya se convirtió en candado no vuelve a aparecer. Un hallazgo que solo se parcha vuelve con otras variables; un hallazgo que se vuelve regla + candado se cierra para siempre. (El detalle de cómo se construye un candado vive en `candados-y-capas.md`.)
+
+> 🔴 **Y acá NO termina el trabajo.** Este documento llega hasta el hallazgo, a propósito. Implementar el arreglo tiene sus propias reglas —quién lo hace, qué mira antes de tocar, cómo prueba que no rompió lo sano— y viven en **el protocolo de corrección** (`correccion.md`). Un hallazgo bien cazado y mal corregido deja el sistema peor que antes, y encima con la etiqueta de "revisado".
 
 ---
 

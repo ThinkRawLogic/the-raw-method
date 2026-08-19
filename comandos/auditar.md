@@ -43,7 +43,9 @@ allowed-tools:
 
 ## Qué NO hace
 
-- No arregla nada (es solo lectura). Los arreglos van en otro pase, por el que construye.
+- No arregla nada (es solo lectura). Los arreglos van en **otro pase y con otro agente** — ni el que auditó
+  ni el que construyó el defecto — siguiendo **el protocolo de corrección** (`referencias/correccion.md`:
+  las tres obligaciones + control positivo). El que audita entrega el hallazgo y la evidencia, no el parche.
 - No declara el bloque cerrado: eso lo hace el **dueño** con su OK (`comandos/cerrar-bloque.md` Paso 5).
 
 ## Modo flota (dinero/seguridad)

@@ -18,6 +18,14 @@ const CLAVES_CANONICAS = [
   'rastro', 'config', 'aguante', 'stack', 'dato', 'tests', 'auditoría', 'docs', 'OK',
 ];
 
+// Claves que suma la v5 (el protocolo de corrección). DELIBERADAMENTE fuera de CLAVES_CANONICAS,
+// por dos razones que romperían repos ajenos si se mezclaran:
+//   · toda ficha v1–v4 YA CERRADA pasaría a "le falta una clave" (rotura retroactiva);
+//   · esFicha() usa CLAVES_CANONICAS para decidir qué .md es una ficha — y hay proyectos con su
+//     propio juego de claves que YA usan (ecosistema); entrarían por la puerta de atrás y se les
+//     exigirían las 15 canónicas que nunca tuvieron.
+const CLAVES_V5 = ['ecosistema'];
+
 const MARCADORES = ['.the-raw-method', 'docs/_cobertura', '_cobertura', 'candados/conformance.test.ts', 'INVARIABLES.md'];
 
 /** Sube por los padres buscando la raíz del proyecto-método (como git encuentra su raíz). */
@@ -58,6 +66,9 @@ function esV3(texto) { return versionFicha(texto) >= 3; }
 // v4: CANDADO DE DISPOSICIÓN DE DEBILIDADES (3.4) — ninguna debilidad del 50/50 queda colgando:
 // cada una lleva su disposición. Lo objetivo se resuelve; lo subjetivo es del dueño (no se autocorrige).
 function esV4(texto) { return versionFicha(texto) >= 4; }
+// v5: CANDADO DEL PROTOCOLO DE CORRECCIÓN (3.5) — la clave (ecosistema): al IMPLEMENTAR un arreglo,
+// las tres obligaciones respondidas por escrito (ver referencias/correccion.md).
+function esV5(texto) { return versionFicha(texto) >= 5; }
 
 // C26: una ficha CERRADA en o después de esta fecha NO puede degradarse al formato "legacy"
 // (sin honestidad ni auditor) para esquivar esos candados. Antes de la fecha el grandfathering
@@ -72,6 +83,13 @@ function fechaFuerzaV2(f) {
 
 /** Parsea una ficha: si está cerrada, y por clave si está marcada y si su NOTA quedó muda. */
 function parseFicha(texto, archivo) {
+  // CRLF → LF EN LA PUERTA (una sola vez, para todos los chequeos que leen f.texto).
+  // En JS el `.` NO matchea los terminadores de línea, y `\r` es uno: con finales CRLF el
+  // `(.*)$` de la regex de claves no llega al final y NINGUNA clave parsea → esFicha() da
+  // false → la ficha entera queda INVISIBLE para el gate. El candado no falla: DESAPARECE
+  // en silencio, que es peor. (medido: 2026-08-18 — misma ficha, LF: 15 claves / CRLF: 0.)
+  // Un `.md` escrito en Windows llega así de fábrica, así que no era un caso raro.
+  texto = (texto || '').replace(/\r\n/g, '\n');
   // [ \t]* (no \s*) para no cruzar el salto de línea y capturar la línea siguiente como "fecha".
   const mFecha = texto.match(/Fecha de cierre:\**[ \t]*([^\n]*)/i);
   const valorFecha = (mFecha && mFecha[1] ? mFecha[1] : '').replace(/[_*\s]/g, '');
@@ -245,6 +263,48 @@ function problemasDeDisposicion(texto) {
   return out;
 }
 
+// --- Protocolo de corrección (3.5, fichas v5): la clave (ecosistema) --------
+// La auditoría termina en el HALLAZGO; el método no decía nada de cómo se implementa el arreglo.
+// Esta clave lo hace exigible en el commit: las tres obligaciones respondidas POR ESCRITO
+// (qué dependía y cómo lo busqué · cómo probé que lo sano sigue sano · por qué nació el hueco),
+// más el control positivo y quién corrigió. Detalle: referencias/correccion.md.
+// Lo que la máquina revisa es que la respuesta EXISTA y que no se declare N/A un bloque que sí
+// corrigió; que la respuesta sea VERDADERA es juicio y queda declarado como 👁 (nunca disfrazado).
+
+// esNA vive en el router (una sola forma de reconocer un "N/A" en español). Lazy + tolerante:
+// si el router no estuviera, se saltea SÓLO el sub-chequeo del falso N/A, no todo el candado.
+function esNAdeNota(nota) {
+  try { return require('./raw-router').esNA(nota); } catch (_) { return false; }
+}
+
+// ¿El 50/50 declara al menos una debilidad ARREGLADA? Entonces el bloque SÍ corrigió algo, y
+// (ecosistema) no puede ser N/A. Se lee sólo el cuerpo de "Debilidades" y SIN la guía en
+// blockquote de la plantilla — que nombra las disposiciones como ejemplo y dispararía siempre.
+function declaraArreglo(texto) {
+  const m = (texto || '').match(/(^|\n)\s*#{1,6}\s*Debilidades[^\n]*/i);
+  if (!m) return false;
+  const rest = (texto || '').slice(m.index + m[0].length);
+  const corte = rest.search(/\n\s*(?:#{1,6}\s|---|\*\*(?:Construy|Audit|Fecha de cierre|Rastro))/i);
+  const cuerpo = (corte === -1 ? rest : rest.slice(0, corte)).split('\n').filter((l) => !/^\s*>/.test(l)).join('\n');
+  return /\[\s*objetiva-arreglada\s*\]/i.test(cuerpo);
+}
+
+function problemasDeEcosistema(f) {
+  const out = [];
+  for (const clave of CLAVES_V5) {
+    if (!f.claves.has(clave)) {
+      out.push(`falta la clave (${clave}) — el protocolo de corrección: las tres obligaciones respondidas por escrito (la exige toda ficha v5)`);
+    } else if (f.claves.get(clave) === false) {
+      out.push(`(${clave}) quedó en [ ] pero el bloque se declaró cerrado`);
+    } else if (f.notaFaltante.has(clave)) {
+      out.push(`(${clave}) está marcada [x] pero su nota quedó vacía — escribí las tres obligaciones (qué dependía y CÓMO lo busqué · cómo PROBASTE que lo sano sigue sano · por qué NACIÓ el hueco) + el control positivo + quién corrigió, o "N/A — <por qué>"`);
+    } else if (esNAdeNota(f.notas.get(clave)) && declaraArreglo(f.texto)) {
+      out.push(`(${clave}) quedó marcada N/A, pero el 50/50 de esta misma ficha declara una debilidad "[objetiva-arreglada]" — si hubo un arreglo, hubo corrección: respondé las tres obligaciones`);
+    }
+  }
+  return out;
+}
+
 // --- Auditoría (3.2): independencia del auditor -----------------------------
 function valorCampo(texto, etiquetaRe) {
   const m = (texto || '').match(etiquetaRe);
@@ -313,7 +373,8 @@ function leerFichas(dir) {
 
 /**
  * Revisa la cobertura + honestidad + auditoría. Devuelve { esMetodo, fichas, cerradas, problemas }.
- * Cobertura se exige a toda ficha cerrada; honestidad y auditoría, solo a las fichas v2.
+ * Cobertura se exige a toda ficha cerrada; honestidad y auditoría, solo a las fichas v2;
+ * "Qué revisar" desde la v3, disposición de debilidades desde la v4, (ecosistema) desde la v5.
  */
 function revisarCobertura(dir, leerFichasFn) {
   const root = metodoRoot(dir);
@@ -333,11 +394,15 @@ function revisarCobertura(dir, leerFichasFn) {
     if (esV4(f.texto)) { // disposición de debilidades: SÓLO fichas v4 (forward-only por marcador; no brickea repos que no adoptaron aún)
       for (const p of problemasDeDisposicion(f.texto)) problemas.push(`${f.archivo}: ${p}`);
     }
+    if (esV5(f.texto)) { // protocolo de corrección: SÓLO fichas v5 (mismo forward-only que la v4)
+      for (const p of problemasDeEcosistema(f)) problemas.push(`${f.archivo}: ${p}`);
+    }
   }
   return { esMetodo: true, fichas, cerradas, problemas };
 }
 
 module.exports = {
-  CLAVES_CANONICAS, MARCADORES, metodoRoot, isMethodProject, esV2, esV3, esV4, versionFicha, parseFicha, esFicha,
-  problemasDeFicha, problemasDeHonestidad, problemasDeRevision, problemasDeDisposicion, problemasDeAuditoria, leerFichas, revisarCobertura,
+  CLAVES_CANONICAS, CLAVES_V5, MARCADORES, metodoRoot, isMethodProject, esV2, esV3, esV4, esV5, versionFicha, parseFicha, esFicha,
+  problemasDeFicha, problemasDeHonestidad, problemasDeRevision, problemasDeDisposicion, problemasDeEcosistema,
+  declaraArreglo, problemasDeAuditoria, leerFichas, revisarCobertura,
 };
