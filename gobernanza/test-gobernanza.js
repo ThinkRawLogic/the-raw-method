@@ -110,11 +110,21 @@ function correrGate(command, dir, home) {
   const opts = { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: dir }), encoding: 'utf8' };
   if (home) opts.env = envHome(home);
   const r = spawnSync('node', [GATE], opts);
-  // `out` = stdout: por ahí sale el AVISO no-bloqueante (JSON con `systemMessage`).
+  // `out` = stdout: por ahí sale el AVISO no-bloqueante (JSON del contrato PreToolUse).
   return { code: r.status, err: r.stderr || '', out: r.stdout || '' };
 }
-/** El aviso para el humano que el gate emitió (o null). Un stdout que no es JSON = no hay aviso. */
-function avisoDe(r) { try { return JSON.parse(r.out || '{}').systemMessage || null; } catch (_) { return null; } }
+/** El JSON que el gate escribió por stdout ({} si no escribió nada, o si no es JSON). */
+function jsonDe(r) { try { return JSON.parse(r.out || '{}'); } catch (_) { return {}; } }
+/**
+ * El aviso que el gate emitió (o null). Se lee por `hookSpecificOutput.additionalContext` —el
+ * ÚNICO canal MEDIDO que llega a alguien (el harness lo inyecta en el contexto de la IA)— y se
+ * exige el `hookEventName` correcto, porque sin él el harness descarta el campo. Leerlo por acá
+ * es lo que pone ROJO este test si alguien vuelve a emitir el aviso por un canal que nadie lee.
+ */
+function avisoDe(r) {
+  const h = jsonDe(r).hookSpecificOutput || {};
+  return h.hookEventName === 'PreToolUse' ? (h.additionalContext || null) : null;
+}
 // Home NEUTRO por defecto: la máquina que corre la suite puede tener el modo siempre-activo
 // prendido (marcador `.the-raw-method` en su ~) y eso NO debe contaminar los tests.
 const HOME_NEUTRO = tmpProyecto('home-neutro');
@@ -366,14 +376,27 @@ function gitCommit(dir, msg) { spawnSync('git', ['-c', 'user.email=a@b.c', '-c',
 // La ceremonia de cierre la disparan dos campos que escribe el MISMO agente que cierra: la
 // "Fecha de cierre" y la palabra "[cierre]" en el mensaje del commit. Sin ninguno de los dos,
 // una ficha completa pasa como si nada y los candados de cierre no corren: el gate queda inerte
-// y antes no decía una palabra. Ahora AVISA por `systemMessage` (canal del humano) y deja pasar.
+// y antes no decía una palabra. Ahora AVISA y deja pasar.
 // El disparador es la ficha COMPLETA: a medio llenar es trabajo normal y el aviso sería ruido.
+//
+// EL CANAL — `medido: 2026-08-19` por la puerta REAL (hook cableado, commit de verdad, Claude Code
+// 2.1.229): `systemMessage` NO llega a nadie (ni a la pantalla del dueño ni al contexto de la IA) y
+// stderr con exit 0 tampoco; `hookSpecificOutput.additionalContext` SÍ llega a la IA. Por eso el
+// aviso viaja por ahí y su texto le ORDENA a la IA contárselo al dueño. Lo que estos checks pueden
+// fijar es la FORMA del mensaje (canal correcto, exit 0, y silencio cuando corresponde); que el
+// harness lo muestre se comprueba corriendo un commit real, no desde acá.
 { const d = con('aviso-completa', fichaResuelta(false)); // resuelta pero SIN fecha de cierre
   gitInit(d); spawnSync('git', ['add', 'docs/_cobertura/b.md'], { cwd: d });
   const r = correrGate('git commit -m "avanzo el bloque"', d);
   check('aviso: ficha COMPLETA sin "Fecha de cierre" → PERMITIDO (exit 0, no bloquea)', r.code === 0);
-  check('aviso:   · pero lo DICE por el canal del humano (systemMessage)', /Fecha de cierre/i.test(avisoDe(r) || ''));
-  check('aviso:   · y nombra la ficha', /b\.md/.test(avisoDe(r) || '')); }
+  check('aviso:   · pero lo DICE por el canal que llega a la IA (hookSpecificOutput.additionalContext)',
+    /Fecha de cierre/i.test(avisoDe(r) || ''));
+  check('aviso:   · y nombra la ficha', /b\.md/.test(avisoDe(r) || ''));
+  check('aviso:   · le pide a la IA que se lo diga AL DUEÑO (el canal llega a la IA, no al humano)',
+    /due[ñn]o/i.test(avisoDe(r) || ''));
+  check('aviso:   · y NO lo manda por `systemMessage` (canal medido: no lo lee nadie)',
+    !('systemMessage' in jsonDe(r)));
+  check('aviso:   · ni ensucia stderr (ahí también se probó y se descarta)', r.err === ''); }
 { const d = con('aviso-media', fichaConClaveMuda(false)); // a medio llenar: lo NORMAL en un bloque
   gitInit(d); spawnSync('git', ['add', 'docs/_cobertura/b.md'], { cwd: d });
   const r = correrGate('git commit -m "wip"', d);

@@ -15,6 +15,8 @@
  * Contrato PreToolUse: lee JSON por stdin { tool_name, tool_input:{command}, cwd }.
  * Para BLOQUEAR: exit 2 + mensaje por stderr (el harness se lo muestra a la IA).
  * Para PERMITIR: exit 0 sin ruido.
+ * Para PERMITIR AVISANDO: exit 0 + JSON por stdout con `hookSpecificOutput.additionalContext`
+ *   (único canal MEDIDO que llega a alguien; ver el comentario largo sobre `allow()`).
  *
  * Filosofía de fallo: ante un error interno, FALLA-ABIERTO (exit 0) para no brickear
  * tus commits — pero lo avisa por stderr. Un candado que rompe el flujo se apaga solo.
@@ -83,12 +85,26 @@ function leerFichasDelIndex(root) {
   return out;
 }
 
-// PERMITIR, opcionalmente con un AVISO para el humano. El canal es `systemMessage`, el mismo
-// que ya usa raw-session.js: JSON por stdout + exit 0 → Claude Code lo pinta como advertencia
-// en la UI y NO frena nada (sin `permissionDecision`, la decisión de permisos sigue su curso
-// normal). Un stdout que no se pudiera parsear tampoco rompe: el comando pasa igual.
+// PERMITIR, opcionalmente con un AVISO. El canal es `hookSpecificOutput.additionalContext` del
+// contrato PreToolUse: JSON por stdout + exit 0 → el harness INYECTA ese texto en el contexto de
+// la IA que corrió el comando, y NO frena nada (sin `permissionDecision`, la decisión de permisos
+// sigue su curso normal). Un stdout que no se pudiera parsear tampoco rompe: el comando pasa igual.
+//
+// POR QUÉ ESTE CANAL Y NO OTRO — `medido: 2026-08-19` (Claude Code 2.1.229, hook cableado de verdad,
+// commit real que cumplía la condición; NO simulado por stdin):
+//   · `systemMessage` (lo que usaba este archivo antes): NO LLEGA A NADIE. El dueño miró la pantalla
+//     tras un commit real y no apareció nada; y tampoco entró al contexto de la IA. La doc oficial
+//     dice que llega a los dos — acá no llegó. Era un candado decorativo: peor que nada, porque
+//     tranquiliza. (La misma creencia sigue escrita en raw-session.js para SessionStart, SIN medir.)
+//   · stderr con exit 0: NO LLEGA (se descarta; probado en el mismo commit, con marcador propio).
+//   · `additionalContext`: LLEGA. Textual, en el resultado de la herramienta Bash de la IA:
+//     «PreToolUse:Bash hook additional context: ⚠ THE RAW METHOD — b.md: …» y el commit pasó igual.
+// De ahí que el texto del aviso le ORDENE a la IA contárselo al dueño: el canal probado que llega
+// al humano es la IA hablando, el mismo camino que el método ya usa para el banner (SKILL.md).
 function allow(aviso) {
-  if (aviso) { try { process.stdout.write(JSON.stringify({ systemMessage: aviso })); } catch (_) {} }
+  if (aviso) {
+    try { process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: aviso } })); } catch (_) {}
+  }
   process.exit(0);
 }
 function block(msg) {
@@ -256,7 +272,9 @@ function main() {
     return allow(
       `⚠ THE RAW METHOD — ${nombres}: la ficha está COMPLETA pero sin "Fecha de cierre", así que ` +
       'los candados de CIERRE (reporte 50/50, auditor independiente, "qué revisar") NO corrieron sobre ella. ' +
-      'Si este commit cierra el bloque, llená la fecha. Si el bloque sigue abierto, ignorá este aviso: no frena nada.'
+      'DECÍSELO AL DUEÑO en tu próxima respuesta, con el nombre de la ficha: este aviso llega SOLO a vos ' +
+      '(él no lo ve en pantalla), y callártelo lo deja creyendo que el bloque pasó por su ceremonia de cierre. ' +
+      'Si este commit cierra el bloque, llená la fecha. Si el bloque sigue abierto, decilo igual y seguí: no frena nada.'
     );
   }
 
