@@ -110,8 +110,11 @@ function correrGate(command, dir, home) {
   const opts = { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: dir }), encoding: 'utf8' };
   if (home) opts.env = envHome(home);
   const r = spawnSync('node', [GATE], opts);
-  return { code: r.status, err: r.stderr || '' };
+  // `out` = stdout: por ahí sale el AVISO no-bloqueante (JSON con `systemMessage`).
+  return { code: r.status, err: r.stderr || '', out: r.stdout || '' };
 }
+/** El aviso para el humano que el gate emitió (o null). Un stdout que no es JSON = no hay aviso. */
+function avisoDe(r) { try { return JSON.parse(r.out || '{}').systemMessage || null; } catch (_) { return null; } }
 // Home NEUTRO por defecto: la máquina que corre la suite puede tener el modo siempre-activo
 // prendido (marcador `.the-raw-method` en su ~) y eso NO debe contaminar los tests.
 const HOME_NEUTRO = tmpProyecto('home-neutro');
@@ -177,6 +180,32 @@ function gitCommit(dir, msg) { spawnSync('git', ['-c', 'user.email=a@b.c', '-c',
   check('check: clave [ ] → FALLA (exit 1)', r.code === 1); check('check:   · nombra la clave', /seguridad/.test(r.out)); }
 { check('check: ficha resuelta → OK (exit 0)', correrCheck(con('cok', fichaResuelta(true))).code === 0); }
 { check('check: proyecto no-método → OK (exit 0)', correrCheck(tmpProyecto('cnm')).code === 0); }
+
+// --- El VERDE CIEGO: "no hay fichas" y "hay N y no reconocí ninguna" no son lo mismo ---
+// Antes los dos casos imprimían el mismo OK. En un proyecto de cero basta escribir mal el
+// nombre de una casilla para que la ficha quede invisible y el portero siga diciendo OK.
+// AVISA, no bloquea: los tres casos siguen en exit 0.
+{ const r = correrCheck(con('sin-fichas'));
+  check('check: carpeta de cobertura vacía → OK que lo DICE ("todavía no hay fichas")', r.code === 0 && /todav[ií]a no hay fichas/i.test(r.out)); }
+{ const d = con('no-reconocida');
+  // una ficha REAL con el nombre de la casilla mal escrito ("spec-leida" sin tilde, "ordenn"...)
+  ponerFicha(d, 'B1.md', '# Ficha B1\n\n**Fecha de cierre:** 2026-07-20\n\n' +
+    '- [x] **(spec-leida)** sin tilde. → hecho\n- [x] **(ordenn)** typo. → hecho\n');
+  const r = correrCheck(d);
+  check('check: 1 .md y NINGUNO reconocido como ficha → lo AVISA (no un OK ciego)',
+    r.code === 0 && /NINGUNO se reconoci[óo]/i.test(r.out) && /B1\.md/.test(r.out)); }
+{ const d = con('mixta', fichaResuelta(true));
+  ponerFicha(d, 'INDICE.md', '# Índice de fichas\n\nsin claves, es un README.\n');
+  const r = correrCheck(d);
+  check('check: hay ficha real + un README → NO avisa (el aviso es sólo si no se reconoció NINGUNA)',
+    r.code === 0 && !/NINGUNO se reconoci/i.test(r.out) && /1 ficha\(s\)/.test(r.out)); }
+// El hermano del mensaje, en el gate: declarar cierre con la ficha invisible mandaba a copiar
+// OTRA plantilla — el diagnóstico equivocado. Ahora nombra el archivo que no reconoció.
+{ const d = con('cierre-invisible');
+  ponerFicha(d, 'B7.md', '# Ficha B7\n\n**Fecha de cierre:** 2026-07-20\n\n- [x] **(spec-leida)** sin tilde. → hecho\n');
+  const r = correrGate('git commit -m "[cierre] b7"', d);
+  check('gate: [cierre] con la ficha NO reconocida → BLOQUEA nombrando el archivo (no "copiá otra plantilla")',
+    r.code === 2 && /B7\.md/.test(r.err) && /NO reconoci[óo]/i.test(r.err)); }
 
 // =================== Nivel 3.1 — honestidad 50/50 ===========================
 { const r = correrGate('git commit -m x', con('sh', fichaSinHonestidad(true)));
@@ -332,6 +361,37 @@ function gitCommit(dir, msg) { spawnSync('git', ['-c', 'user.email=a@b.c', '-c',
   check('CRLF unit: LF y CRLF parsean el MISMO número de claves',
     parseFicha(fichaResuelta(true)).claves.size === parseFicha(crlf(fichaResuelta(true))).claves.size);
   check('CRLF unit: una ficha CRLF sigue siendo reconocida como ficha', esFicha(parseFicha(crlf(fichaResuelta(true)))) === true); }
+
+// ===== AVISO (no bloquea): una ficha TERMINADA que nadie marcó como cerrada =====
+// La ceremonia de cierre la disparan dos campos que escribe el MISMO agente que cierra: la
+// "Fecha de cierre" y la palabra "[cierre]" en el mensaje del commit. Sin ninguno de los dos,
+// una ficha completa pasa como si nada y los candados de cierre no corren: el gate queda inerte
+// y antes no decía una palabra. Ahora AVISA por `systemMessage` (canal del humano) y deja pasar.
+// El disparador es la ficha COMPLETA: a medio llenar es trabajo normal y el aviso sería ruido.
+{ const d = con('aviso-completa', fichaResuelta(false)); // resuelta pero SIN fecha de cierre
+  gitInit(d); spawnSync('git', ['add', 'docs/_cobertura/b.md'], { cwd: d });
+  const r = correrGate('git commit -m "avanzo el bloque"', d);
+  check('aviso: ficha COMPLETA sin "Fecha de cierre" → PERMITIDO (exit 0, no bloquea)', r.code === 0);
+  check('aviso:   · pero lo DICE por el canal del humano (systemMessage)', /Fecha de cierre/i.test(avisoDe(r) || ''));
+  check('aviso:   · y nombra la ficha', /b\.md/.test(avisoDe(r) || '')); }
+{ const d = con('aviso-media', fichaConClaveMuda(false)); // a medio llenar: lo NORMAL en un bloque
+  gitInit(d); spawnSync('git', ['add', 'docs/_cobertura/b.md'], { cwd: d });
+  const r = correrGate('git commit -m "wip"', d);
+  check('aviso: ficha a MEDIO LLENAR → PERMITIDO y CALLADO (no es ruido en cada commit)',
+    r.code === 0 && avisoDe(r) === null); }
+{ const d = con('aviso-cerrada', fichaResuelta(true));
+  gitInit(d); spawnSync('git', ['add', 'docs/_cobertura/b.md'], { cwd: d });
+  fs.mkdirSync(path.join(d, 'docs'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'docs', 'BITACORA.md'), '# Bitácora\n\n## 2026-07-20 — cerrado\n');
+  spawnSync('git', ['add', 'docs/BITACORA.md'], { cwd: d });
+  const r = correrGate('git commit -m "[cierre] b1"', d);
+  check('aviso: ficha ya CERRADA → PERMITIDO y CALLADO (el aviso no le grita al que sí cerró)',
+    r.code === 0 && avisoDe(r) === null); }
+{ const d = con('aviso-notocada', fichaResuelta(false));
+  gitInit(d); gitStage(d, 'src/a.js', 'const a = 1;\n'); // el commit NO toca la ficha
+  const r = correrGate('git commit -m "toco otra cosa"', d);
+  check('aviso: ficha completa sin cerrar pero el commit NO la toca → CALLADO',
+    r.code === 0 && avisoDe(r) === null); }
 
 // ============== Nivel 4 — REGRESIONES del red-team adversario ================
 

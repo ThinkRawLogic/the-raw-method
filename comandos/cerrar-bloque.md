@@ -191,7 +191,9 @@ El reporte honesto es el agente juzgándose **a sí mismo**. Falta el otro lado:
 Todo lo de arriba **prepara** el cierre. No lo declara.
 
 - El agente presenta: las tres auditorías corridas, la ficha resuelta, los documentos al día y el reporte
-  honesto.
+  honesto. **El formato de esa presentación es `plantillas/REVISAR.md`** — el handoff al dueño: qué se hizo,
+  qué decidió la IA sola (FORMA, para contrastar), qué necesita **su** decisión (FONDO), la evaluación honesta
+  y dónde se retoma. Está escrito para él, no para el que construyó.
 - 🔴 **El cierre lo declara el dueño**, no la IA. Recién con su OK explícito el bloque queda cerrado.
 - Esto no es trámite: es el **freno de mano** del método. Lo irreversible o de fondo —cerrar, publicar,
   mover a producción— **siempre** frena y espera al dueño.

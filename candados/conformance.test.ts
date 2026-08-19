@@ -18,6 +18,16 @@
  * referencia y se lee fácil. El PATRÓN transfiere a cualquier lenguaje: leer archivos
  * del repo y fallar a propósito. En Python sería pytest; en Go, un TestConformance.
  *
+ * ⚠ HAY DOS PARSERS DE FICHA, Y ES A PROPÓSITO. El de acá y el de
+ * `gobernanza/raw-cobertura.js` (el motor) leen el mismo formato con código distinto:
+ * este kit VIAJA al proyecto y tiene que correr solo, sin depender de que `gobernanza/`
+ * exista. Es una REIMPLEMENTACIÓN DELIBERADA, no una copia sincronizada — nadie las
+ * genera de la otra, y no hay ningún proceso que las mantenga iguales. Consecuencia
+ * práctica: cuando el motor arregla un bug de PARSEO, hay que portarlo a mano acá
+ * (y al revés). Este archivo ya trae portado el de la nota "vacía" — ver parseFicha().
+ * Diferencia declarada y querida: el motor exige, además, las secciones que el método
+ * suma por versión de ficha (v2–v5); este kit es el piso portable (ver más abajo).
+ *
  * Correr suelto:  npx vitest run candados/conformance.test.ts
  */
 
@@ -91,7 +101,7 @@ interface Ficha {
   cerrada: boolean;
   // clave -> marcada ([x]) o no ([ ]); ausente si la clave no aparece en la ficha
   claves: Map<string, boolean>;
-  // claves cuya nota sigue en "___" (el slot no se llenó al cerrar)
+  // claves cuya NOTA quedó vacía al cerrar (el "___" sin llenar, o borrada del todo)
   notaFaltante: Set<string>;
 }
 
@@ -105,7 +115,11 @@ function leerFichas(): Ficha[] {
 
 /** Extrae de una ficha si está cerrada y el estado de cada clave. */
 function parseFicha(ruta: string, archivo: string): Ficha {
-  const texto = readFileSync(ruta, "utf8");
+  // CRLF → LF EN LA PUERTA. En JS el `.` NO matchea `\r`: con finales CRLF (lo normal en
+  // un .md escrito en Windows), el `(.*)$` de la regex de claves no llega al final de la
+  // línea y NINGUNA clave parsea → la ficha entera queda INVISIBLE para el candado. No
+  // falla: DESAPARECE en silencio, que es peor. (Mismo motivo por el que lo hace el motor.)
+  const texto = readFileSync(ruta, "utf8").replace(/\r\n/g, "\n");
 
   // ¿Cerrada? Buscamos "Fecha de cierre:" con un valor real (no guiones bajos vacíos).
   const mFecha = texto.match(/Fecha de cierre:\**\s*([^\n]*)/i);
@@ -113,18 +127,26 @@ function parseFicha(ruta: string, archivo: string): Ficha {
   const cerrada = valorFecha.length > 0;
 
   // Cada clave aparece en su propia línea:  - [ ] **(clave)** texto... → ___
-  // Iteramos por línea para mirar, además de la casilla, si el slot de nota "___"
-  // quedó sin llenar (marcar [x] sin escribir la nota tampoco cuenta como resuelto).
+  // Iteramos por línea para mirar, además de la casilla, si la NOTA quedó sin llenar
+  // (marcar [x] sin escribir la nota tampoco cuenta como resuelto).
   const claves = new Map<string, boolean>();
   const notaFaltante = new Set<string>();
-  const re = /-\s*\[( |x|X)\]\s*\*\*\(([^)]+)\)\*\*/;
+  const re = /-\s*\[( |x|X)\]\s*\*\*\(([^)]+)\)\*\*(.*)$/;
   for (const linea of texto.split("\n")) {
     const m = re.exec(linea);
     if (!m) continue;
     const marcada = m[1].toLowerCase() === "x";
     const clave = m[2].trim();
     claves.set(clave, marcada);
-    if (linea.includes("___")) notaFaltante.add(clave); // placeholder sin llenar
+    // La NOTA es lo que sigue a la flecha (→ o ->); si no hay flecha, todo el resto.
+    // Muda si, tras quitar el relleno (_ * espacios), queda vacía. Así se caza el "___"
+    // sin llenar Y la nota borrada del todo, SIN el falso positivo de una nota real que
+    // contiene "___" (una ruta, una URL): ahí quedan caracteres de verdad.
+    // Antes esto era `linea.includes("___")` y frenaba el commit por una ruta legítima.
+    let notaRaw = m[3] ?? "";
+    const flecha = notaRaw.match(/(?:→|->)\s*([\s\S]*)$/);
+    if (flecha) notaRaw = flecha[1];
+    if (notaRaw.replace(/[_*\s]/g, "").length === 0) notaFaltante.add(clave);
   }
 
   return { archivo, cerrada, claves, notaFaltante };
@@ -146,7 +168,7 @@ describe("candado: COBERTURA (un bloque cerrado resuelve todas sus claves)", () 
         } else if (f.claves.get(clave) === false) {
           problemas.push(`${f.archivo}: la clave (${clave}) quedó en [ ] pero el bloque se declaró cerrado`);
         } else if (f.notaFaltante.has(clave)) {
-          problemas.push(`${f.archivo}: la clave (${clave}) está marcada [x] pero su nota sigue vacía (el "___" sin llenar)`);
+          problemas.push(`${f.archivo}: la clave (${clave}) está marcada [x] pero su nota quedó vacía (escribí el CÓMO, o "N/A — por qué")`);
         }
       }
     }

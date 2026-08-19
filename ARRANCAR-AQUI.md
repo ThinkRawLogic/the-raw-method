@@ -2,7 +2,7 @@
 
 > **La puerta de entrada.** Si nunca usaste The Raw Method, empieza acá. No leas los 16 pilares todavía, no leas todas las referencias. Este documento es el mínimo para arrancar bien hoy, en minutos. El resto lo aprendes construyendo.
 
-El método completo es grande porque cubre todo lo que un software serio necesita. Pero **adoptarlo no es grande**: se arranca con tres cosas y un arnés que se instala en tres pasos. Todo lo demás crece solo, a medida que tu proyecto aprende de sus propios errores.
+El método completo es grande porque cubre todo lo que un software serio necesita. Pero **adoptarlo no es grande**: se arranca con tres cosas y un arnés que se instala en cuatro pasos. Todo lo demás crece solo, a medida que tu proyecto aprende de sus propios errores.
 
 Esta es la versión mínima viable. Léela entera —son pocos minutos— y ya puedes empezar tu primer bloque.
 
@@ -39,17 +39,40 @@ La "ley" es el documento donde viven tus reglas. La regla acá es simple: **un d
 
 ---
 
-## Instalar el arnés en 3 pasos
+## Instalar el arnés en 4 pasos
 
 El "arnés" es lo que hace que seguir el método **deje de ser un acto de memoria**: candados (reglas escritas como código) que corren solos y **no dejan guardar** si algo las rompe. Se instala una vez:
 
-1. **Copia `plantillas/`** a tu proyecto — trae la ficha de cobertura, la ley, la bitácora, el backlog y las demás plantillas vacías. Un proyecto nuevo empieza vacío y las va llenando solo.
+1. **Copia `plantillas/`** a tu proyecto — trae la ficha de cobertura, la ley, la bitácora, el backlog, el handoff para ti (`REVISAR.md`) y las demás plantillas vacías. Un proyecto nuevo empieza vacío y las va llenando solo.
 2. **Copia `candados/`** a tu proyecto — trae el kit de arnés reusable: `conformance.test.ts` (dos candados genéricos listos: cobertura y arranque), `candado-plantilla.ts` (el molde para escribir los tuyos) y `pre-commit.sample` (el hook de git). El proyecto necesita su corredor de tests instalado (en el stack de referencia, TypeScript, es `vitest`).
 3. **Cablea el pre-commit** — copia `pre-commit.sample` al hook de git (las instrucciones exactas están dentro del archivo). Desde ahí, cada vez que guardas (`git commit`), los candados corren solos; si uno falla, **no guarda**.
+4. **Cablea la gobernanza** — el paso que casi todos se saltan, y el único que no se puede esquivar. Ver abajo.
 
-Ese paso 3 es el momento en que el método deja de depender de tu disciplina. Ya no tienes que acordarte de correr nada: la puerta se cierra sola.
+Los pasos 2 y 3 vigilan **el código**. El paso 4 vigila **otra cosa**: que la IA (o tú, un viernes cansado) **no corra el método**. Son dos huecos distintos, y el segundo no se tapa con los candados del código.
 
 > Si algo de esto suena a chino, es la parte donde tu socio técnico (o la propia IA) te ayuda una vez. Después queda puesto para siempre.
+
+### El paso 4 en detalle: la gobernanza
+
+La carpeta `gobernanza/` del método trae dos piezas que corren **fuera** de tu proyecto, a nivel del programa con el que trabajas (Claude Code):
+
+- **El reflejo** — al abrir cada sesión le recuerda a la IA que este proyecto opera bajo el método. No puede "olvidarlo".
+- **El portero** — intercepta el `git commit` y lo **rechaza** si una ficha marcada como cerrada dejó una clave sin resolver.
+
+Por qué importa más que el paso 3: el pre-commit de git **se puede saltar** escribiendo `git commit --no-verify`. Esto **no**, porque se mete antes de que git llegue a correr.
+
+**Cómo se cablea — y sí, es editar un archivo de configuración a mano.** No lo escondemos: hoy no hay un instalador. Son cuatro movimientos:
+
+1. **Abre (o crea) el archivo `settings.json` de Claude Code.** En Windows está en `C:\Users\TU-USUARIO\.claude\settings.json`; en Mac/Linux, en `~/.claude/settings.json`. Si no existe, créalo con dos llaves adentro: `{}`.
+2. **Abre `gobernanza/hooks.json`** (del método) y **copia el bloque `"hooks"` completo** dentro de tu `settings.json`. Si tu archivo ya tenía un bloque `"hooks"`, **suma** las entradas dentro del que ya está — no lo reemplaces, o apagas lo que ya tenías.
+3. **Reemplaza `__GOBERNANZA__`** (aparece cuatro veces) por la ruta real de la carpeta `gobernanza/` del método en tu máquina. Si instalaste el método como se explica en `INSTALL.md`, esa ruta es `C:\Users\TU-USUARIO\.claude\skills\the-raw-method\gobernanza`.
+4. **Marca tu proyecto** para que la gobernanza sepa que le corresponde: alcanza con crear en la raíz un archivo vacío llamado `.the-raw-method`. (También sirve tener una carpeta `docs/_cobertura/`, un `INVARIABLES.md` o el `candados/conformance.test.ts` del paso 2.) **Sin marcador, la gobernanza no se mete** — así tus otros proyectos no ganan fricción.
+
+Después **cierra y vuelve a abrir la sesión**: los hooks se leen al arrancar. Si quedó bien puesto, verás un cartel que dice que The Raw Method está activo.
+
+> **El atajo honesto:** pídeselo a la propia IA — *"cablea la gobernanza de The Raw Method en mi settings.json"* — y revisa lo que hizo. Es un paso de una sola vez, y el detalle completo (incluido el modo por proyecto y el candado en el servidor) vive en `gobernanza/README.md`.
+
+**Si no haces el paso 4**, el método sigue sirviendo: las plantillas, la ficha y el pre-commit funcionan igual. Lo que pierdes es la red que atrapa el caso más común de todos — que el método simplemente no se corra.
 
 ---
 

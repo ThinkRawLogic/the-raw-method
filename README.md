@@ -22,7 +22,12 @@ especialmente cuando lo construye una IA dirigida por alguien que no es ingenier
   - `documentos-vivos.md` — el ecosistema de documentos y para qué sirve cada uno.
   - `candados-y-capas.md` — las 3 capas de enforcement y cómo se construye un candado.
 - **`plantillas/`** — plantillas **vacías** para arrancar un proyecto nuevo (la ley, la ficha de cobertura, el
-  arranque de sesión, el backlog, la bitácora, las decisiones autónomas).
+  arranque de sesión, el backlog, la bitácora, las decisiones autónomas, el handoff al dueño).
+- **`candados/`** — el arnés reusable que corre en cada `git commit`: candados genéricos listos, el molde para
+  escribir los tuyos y el hook de git.
+- **`gobernanza/`** — el candado del **proceso**: los otros vigilan el código; éste vigila que el método **se
+  corra**. Se cablea a nivel de Claude Code (hooks) y **no se evade con `--no-verify`**. Cómo se instala, paso a
+  paso y en llano, está en `ARRANCAR-AQUI.md` (paso 4); el detalle técnico, en `gobernanza/README.md`.
 
 ---
 

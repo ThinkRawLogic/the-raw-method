@@ -60,6 +60,9 @@ cd ~/.claude/skills/the-raw-method && git pull
 - `referencias/` — el detalle: los 16 pilares, la auditoría adversaria, los modelos de IA, los documentos vivos, los candados.
 - `plantillas/` — plantillas VACÍAS que un proyecto nuevo copia y llena a medida que aprende.
 - `candados/` — el arnés reusable (tests de conformidad que hacen cumplir las reglas solas).
+- `gobernanza/` — el candado del **proceso**: hooks que se cablean en tu `settings.json` para que el método no
+  dependa de que alguien se acuerde. **No queda instalado con este `git clone`** — se cablea aparte, en cuatro
+  movimientos explicados en llano en `ARRANCAR-AQUI.md` (paso 4).
 - `ARRANCAR-AQUI.md` — la puerta de entrada: lo mínimo para empezar hoy.
 - `SOBRE-THE-RAW-METHOD.html` — la página que explica el método en cristiano.
 

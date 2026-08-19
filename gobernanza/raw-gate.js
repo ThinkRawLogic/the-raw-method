@@ -83,7 +83,14 @@ function leerFichasDelIndex(root) {
   return out;
 }
 
-function allow() { process.exit(0); }
+// PERMITIR, opcionalmente con un AVISO para el humano. El canal es `systemMessage`, el mismo
+// que ya usa raw-session.js: JSON por stdout + exit 0 → Claude Code lo pinta como advertencia
+// en la UI y NO frena nada (sin `permissionDecision`, la decisión de permisos sigue su curso
+// normal). Un stdout que no se pudiera parsear tampoco rompe: el comando pasa igual.
+function allow(aviso) {
+  if (aviso) { try { process.stdout.write(JSON.stringify({ systemMessage: aviso })); } catch (_) {} }
+  process.exit(0);
+}
 function block(msg) {
   process.stderr.write(
     '\n⛔ THE RAW METHOD — commit bloqueado por el candado de cobertura.\n\n' +
@@ -129,7 +136,7 @@ function main() {
   const ES_COMMIT = /\bgit\s+(?:-c\s+\S+\s+|-C\s+\S+\s+|--?[\w-]+(?:=\S+)?\s+)*(commit|merge|revert|cherry-pick|am)\b/i;
   if (!ES_COMMIT.test(command)) return allow();
 
-  const { esMetodo, cerradas, problemas } = revisarCobertura(dir);
+  const { esMetodo, root, fichas, cerradas, problemas } = revisarCobertura(dir);
   if (!esMetodo) return allow(); // fuera de un proyecto Raw Method, no nos metemos
 
   // Regla 0 (C10 — SECRETOS SHIFT-LEFT): el escaneo de secretos corre AL COMMIT, no solo en CI.
@@ -156,13 +163,14 @@ function main() {
 
   // Regla 1b + base del router/C13: evaluar la versión del ÍNDICE de las fichas staged (lo que se
   // commitea de verdad). Una ficha cerrada en el índice no se puede "abrir" en el worktree para saltear.
-  let idxCerradas = [];
+  let idxCerradas = [], idxFichas = [];
   try {
     const idx = revisarCobertura(dir, leerFichasDelIndex);
     if (idx.problemas.length) {
       return block('Cobertura incompleta en la versión STAGED (índice) de un bloque cerrado:\n' + idx.problemas.map((p) => '  · ' + p).join('\n'));
     }
     idxCerradas = idx.cerradas || [];
+    idxFichas = idx.fichas || [];
   } catch (_) { /* sin git: falla-abierto */ }
 
   // ¿Este commit CIERRA un bloque? Por el mensaje ([cierre]/cerrar bloque/close block), O porque hay
@@ -178,9 +186,23 @@ function main() {
   const cerradasEfectivas = conA ? cerradas : (idxCerradas.length ? idxCerradas : cerradas);
 
   // Regla 2: declara cierre pero NO hay ninguna ficha cerrada (ni en worktree ni en índice).
+  // El mensaje distingue los dos motivos, que se veían iguales: no hay ficha, o SÍ hay .md en
+  // _cobertura/ pero ninguno se reconoció como ficha (una casilla mal escrita la vuelve invisible).
+  // Decirle "copiá la plantilla" a alguien que YA tiene su ficha ahí lo manda a resolver otro problema.
   if (declaraCierre && cerradas.length === 0 && idxCerradas.length === 0) {
+    let pista = '';
+    try {
+      const sinReconocer = fichas.length === 0 && root ? require('./raw-cobertura').noFichas(root) : [];
+      if (sinReconocer.length) {
+        pista = `  · OJO: hay ${sinReconocer.length} archivo(s) .md en _cobertura/ que el candado NO reconoció como ficha:\n` +
+          sinReconocer.map((f) => `      ${f}`).join('\n') +
+          '\n    Una ficha se reconoce por el nombre de sus casillas (`- [x] **(spec-leída)** …`); si uno quedó\n' +
+          '    mal escrito, esa ficha es INVISIBLE para el candado. Revisá esos archivos antes de copiar otra plantilla.\n';
+      }
+    } catch (_) { /* el diagnóstico nunca puede tumbar el veredicto */ }
     return block(
       'El commit declara un CIERRE de bloque pero no hay ninguna ficha de cobertura cerrada.\n' +
+      pista +
       '  · Copiá plantillas/ficha-cobertura.md, resolvé TODAS sus claves y llená "Fecha de cierre".'
     );
   }
@@ -210,6 +232,31 @@ function main() {
     return block(
       'Registrás un CIERRE pero el commit no toca la bitácora ni los pendientes.\n' +
       '  · Actualizá BITACORA.md y PENDIENTES.md en el MISMO commit — un doc que miente sobre el estado es un bug.'
+    );
+  }
+
+  // AVISO (NO bloquea) — la ceremonia de cierre se dispara con dos campos que escribe el mismo
+  // agente que cierra: "Fecha de cierre" y la palabra "[cierre]" en el mensaje. Sin ninguno de los
+  // dos, una ficha TERMINADA pasa como si nada y los candados de cierre (50/50 honesto, auditor
+  // independiente, "qué revisar", disposición de debilidades) no corren sobre ella: el gate queda
+  // inerte y hoy no dice una palabra. Acá lo dice.
+  //
+  // CUÁNDO SE CALLA (y por qué): trabajar sobre una ficha a medio llenar es lo NORMAL durante un
+  // bloque — avisar en cada commit sería ruido, y un aviso ruidoso se apaga. El disparador es la
+  // ficha COMPLETA: las 15 claves resueltas, con su nota. Ahí ya no queda trabajo de cobertura
+  // pendiente, así que la fecha vacía es lo único que separa el bloque de su ceremonia; es el
+  // único momento en que el aviso agrega información en vez de repetir lo obvio.
+  const tocadas = conA
+    ? fichas.filter((f) => staged.some((sf) => sf.replace(/\\/g, '/').endsWith(f.archivo)))
+    : idxFichas; // sin -a, el lector del índice YA devuelve sólo las fichas staged
+  const { problemasDeFicha } = require('./raw-cobertura');
+  const completasSinCerrar = tocadas.filter((f) => !f.cerrada && problemasDeFicha(f).length === 0);
+  if (completasSinCerrar.length) {
+    const nombres = completasSinCerrar.map((f) => f.archivo).slice(0, 3).join(', ');
+    return allow(
+      `⚠ THE RAW METHOD — ${nombres}: la ficha está COMPLETA pero sin "Fecha de cierre", así que ` +
+      'los candados de CIERRE (reporte 50/50, auditor independiente, "qué revisar") NO corrieron sobre ella. ' +
+      'Si este commit cierra el bloque, llená la fecha. Si el bloque sigue abierto, ignorá este aviso: no frena nada.'
     );
   }
 

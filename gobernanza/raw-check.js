@@ -16,10 +16,10 @@
  * Lo corren el workflow de CI (.github/workflows/raw-method.yml) y una persona.
  */
 'use strict';
-const { revisarCobertura } = require('./raw-cobertura');
+const { revisarCobertura, noFichas } = require('./raw-cobertura');
 
 const dir = process.argv[2] || process.cwd();
-const { esMetodo, cerradas, problemas } = revisarCobertura(dir);
+const { esMetodo, root, fichas, cerradas, problemas } = revisarCobertura(dir);
 
 if (!esMetodo) {
   console.log('raw-check: no es un proyecto Raw Method (no hay marcador ni fichas) — nada que revisar.');
@@ -56,5 +56,23 @@ try {
   }
 } catch (_) { /* sin git o error: no bloqueamos por el propio candado */ }
 
-console.log(`✓ raw-check OK — ${cerradas.length} ficha(s) cerrada(s), todas resueltas.`);
+// El OK dice sobre QUÉ corrió. Antes, "0 ficha(s) cerrada(s), todas resueltas" salía igual con la
+// carpeta VACÍA que con N archivos de los que no se reconoció ninguno — y ese segundo caso es un
+// candado CIEGO (basta escribir mal el nombre de una casilla para que la ficha desaparezca del
+// gate). AVISA, no bloquea: exit 0 en los dos casos — nada que hoy pasa empieza a rebotar.
+if (fichas.length === 0) {
+  const sinReconocer = root ? noFichas(root) : [];
+  if (sinReconocer.length) {
+    console.log(`⚠ raw-check — hay ${sinReconocer.length} archivo(s) .md en _cobertura/ y NINGUNO se reconoció como ficha:`);
+    for (const f of sinReconocer) console.log('  · ' + f);
+    console.log('  Una ficha se reconoce por el nombre de sus casillas — la línea `- [x] **(spec-leída)** …`.');
+    console.log('  Si un nombre quedó mal escrito, esa ficha es INVISIBLE para el candado (no la revisa nadie).');
+    console.log('  Si son índices/README, está bien: este aviso no bloquea.');
+  } else {
+    console.log('✓ raw-check OK — todavía no hay fichas de cobertura (nada que revisar).');
+  }
+  process.exit(0);
+}
+
+console.log(`✓ raw-check OK — ${fichas.length} ficha(s), ${cerradas.length} cerrada(s), todas resueltas.`);
 process.exit(0);

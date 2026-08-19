@@ -157,6 +157,8 @@ Ojo con la diferencia: la Bitácora (doc 5) guarda **decisiones**; este guarda *
 
 ## 14. Para revisar — el handoff al dueño 👁
 
+**Plantilla:** `plantillas/REVISAR.md`.
+
 **Qué es.** Al cerrar un bloque o una sesión, un documento **para el dueño** (no-ingeniero) que dice, en lenguaje llano: **qué se hizo, qué decidió la IA por su cuenta (FORMA), qué necesita la decisión del dueño (FONDO), la evaluación honesta** (fortalezas / debilidades / qué falta), y el estado del entorno. Arranca vacío y se llena de a poco, un cierre a la vez.
 
 **Para qué sirve.** Es el puente entre *"la IA trabajó"* y *"el dueño decide con criterio"*. Junta en un solo lugar dos cosas que el método ya exige por separado: la **regla de autonomía** (las decisiones de FORMA se anotan para contrastar; las de FONDO se traen al dueño) y la **honestidad proactiva** (fortalezas Y debilidades, sin que las pidan). Sin este doc, el dueño se entera de lo que la IA decidió sola solo si lo caza; con él, lo tiene servido y puede vetar. Es *owner-facing*, como el glosario.

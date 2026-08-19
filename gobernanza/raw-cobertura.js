@@ -353,10 +353,16 @@ function problemasDeAuditoria(texto, dir) {
   return out;
 }
 
-/** Junta las fichas REALES del proyecto (ignora .md que no son fichas). */
-function leerFichas(dir) {
+/**
+ * Recorre la(s) carpeta(s) de cobertura y separa los .md en dos: los que SON fichas y los
+ * que no. Los segundos existen por dos motivos MUY distintos y hay que poder distinguirlos:
+ * un README/índice legítimo (que no debe tratarse como ficha), o una ficha REAL con el
+ * nombre de una casilla mal escrito — que queda invisible para el gate. Sin este dato, el
+ * candado dice "OK, 0 fichas" con la misma cara en los dos casos, y en el segundo está ciego.
+ */
+function recorrerCobertura(dir) {
   const dirs = [path.join(dir, 'docs', '_cobertura'), path.join(dir, '_cobertura')];
-  const fichas = [];
+  const fichas = [], noFichas = [];
   for (const d of dirs) {
     let entradas = [];
     try { entradas = fs.readdirSync(d); } catch (_) { continue; }
@@ -364,21 +370,30 @@ function leerFichas(dir) {
       if (!f.endsWith('.md')) continue;
       try {
         const ficha = parseFicha(fs.readFileSync(path.join(d, f), 'utf8'), f);
-        if (esFicha(ficha)) fichas.push(ficha); // un README/índice con "Fecha de cierre:" no es una ficha
+        // un README/índice con "Fecha de cierre:" no es una ficha
+        if (esFicha(ficha)) fichas.push(ficha); else noFichas.push(f);
       } catch (_) {}
     }
   }
-  return fichas;
+  return { fichas, noFichas };
 }
 
+/** Junta las fichas REALES del proyecto (ignora .md que no son fichas). */
+function leerFichas(dir) { return recorrerCobertura(dir).fichas; }
+
+/** Los NOMBRES de los .md que viven en _cobertura/ y que esFicha() NO reconoció. */
+function noFichas(dir) { return recorrerCobertura(dir).noFichas; }
+
 /**
- * Revisa la cobertura + honestidad + auditoría. Devuelve { esMetodo, fichas, cerradas, problemas }.
+ * Revisa la cobertura + honestidad + auditoría. Devuelve { esMetodo, root, fichas, cerradas, problemas }.
  * Cobertura se exige a toda ficha cerrada; honestidad y auditoría, solo a las fichas v2;
  * "Qué revisar" desde la v3, disposición de debilidades desde la v4, (ecosistema) desde la v5.
  */
 function revisarCobertura(dir, leerFichasFn) {
   const root = metodoRoot(dir);
-  if (!root) return { esMetodo: false, fichas: [], cerradas: [], problemas: [] };
+  // `root` viaja en el resultado para que quien reporte no tenga que re-deducir la raíz
+  // (la necesita, p.ej., para preguntar por los .md que NO se reconocieron como ficha).
+  if (!root) return { esMetodo: false, root: null, fichas: [], cerradas: [], problemas: [] };
   const fichas = (leerFichasFn || leerFichas)(root); // inyectable: el gate le pasa un lector del ÍNDICE de git
   const cerradas = fichas.filter((f) => f.cerrada);
   const problemas = [];
@@ -398,11 +413,11 @@ function revisarCobertura(dir, leerFichasFn) {
       for (const p of problemasDeEcosistema(f)) problemas.push(`${f.archivo}: ${p}`);
     }
   }
-  return { esMetodo: true, fichas, cerradas, problemas };
+  return { esMetodo: true, root, fichas, cerradas, problemas };
 }
 
 module.exports = {
   CLAVES_CANONICAS, CLAVES_V5, MARCADORES, metodoRoot, isMethodProject, esV2, esV3, esV4, esV5, versionFicha, parseFicha, esFicha,
   problemasDeFicha, problemasDeHonestidad, problemasDeRevision, problemasDeDisposicion, problemasDeEcosistema,
-  declaraArreglo, problemasDeAuditoria, leerFichas, revisarCobertura,
+  declaraArreglo, problemasDeAuditoria, leerFichas, noFichas, revisarCobertura,
 };
